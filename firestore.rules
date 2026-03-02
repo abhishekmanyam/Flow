@@ -1,0 +1,157 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuth() {
+      return request.auth != null;
+    }
+    function isWorkspaceMember(wsId) {
+      return isAuth() && exists(/databases/$(database)/documents/workspaces/$(wsId)/members/$(request.auth.uid));
+    }
+    function getRole(wsId) {
+      return get(/databases/$(database)/documents/workspaces/$(wsId)/members/$(request.auth.uid)).data.role;
+    }
+    function isAdmin(wsId) {
+      return isWorkspaceMember(wsId) && getRole(wsId) == 'admin';
+    }
+
+    // Project-level access helpers
+    function isProjectMember(wsId, projId) {
+      return exists(/databases/$(database)/documents/workspaces/$(wsId)/projects/$(projId)/project_members/$(request.auth.uid));
+    }
+    function getProjectRole(wsId, projId) {
+      return get(/databases/$(database)/documents/workspaces/$(wsId)/projects/$(projId)/project_members/$(request.auth.uid)).data.role;
+    }
+    function canAccessProject(wsId, projId) {
+      return isAdmin(wsId) || (isWorkspaceMember(wsId) && isProjectMember(wsId, projId));
+    }
+    function canEditProject(wsId, projId) {
+      return isAdmin(wsId) || (isProjectMember(wsId, projId) && getProjectRole(wsId, projId) in ['project_admin', 'member']);
+    }
+    function isProjectAdmin(wsId, projId) {
+      return isAdmin(wsId) || (isProjectMember(wsId, projId) && getProjectRole(wsId, projId) == 'project_admin');
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow write: if isAuth() && request.auth.uid == userId;
+      // Allow admins to remove a workspaceId when removing a member
+      allow update: if isAuth()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["workspaceIds"]);
+    }
+
+    // Workspaces
+    match /workspaces/{wsId} {
+      allow read: if isWorkspaceMember(wsId);
+      allow create: if isAuth();
+      allow update: if isAdmin(wsId);
+
+      // Members
+      match /members/{memberId} {
+        allow read: if isWorkspaceMember(wsId);
+        allow write: if isAdmin(wsId) || (isAuth() && request.auth.uid == memberId);
+      }
+
+      // Attendance
+      match /attendance/{entryId} {
+        allow read: if isWorkspaceMember(wsId) && (
+          resource.data.userId == request.auth.uid ||
+          getRole(wsId) in ['admin', 'manager', 'hr']
+        );
+        allow create: if isWorkspaceMember(wsId) && request.resource.data.userId == request.auth.uid;
+        allow update: if isWorkspaceMember(wsId) && resource.data.userId == request.auth.uid;
+      }
+
+      // Invites
+      match /invites/{inviteId} {
+        allow read: if true;
+        allow create, delete: if isAdmin(wsId);
+        allow update: if isAuth();
+      }
+
+      // Projects
+      match /projects/{projectId} {
+        allow read: if isAdmin(wsId) || (isWorkspaceMember(wsId) && resource.data.memberIds.hasAny([request.auth.uid]));
+        allow create: if isWorkspaceMember(wsId) && getRole(wsId) in ['admin', 'manager'];
+        allow update: if isProjectAdmin(wsId, projectId);
+
+        // Project members
+        match /project_members/{pmId} {
+          allow read: if canAccessProject(wsId, projectId);
+          allow write: if isProjectAdmin(wsId, projectId);
+        }
+
+        // Tasks
+        match /tasks/{taskId} {
+          allow read: if canAccessProject(wsId, projectId);
+          allow create, update: if canEditProject(wsId, projectId);
+
+          // Subtasks
+          match /subtasks/{subtaskId} {
+            allow read: if canAccessProject(wsId, projectId);
+            allow write: if canEditProject(wsId, projectId);
+          }
+
+          // Events (memory)
+          match /events/{eventId} {
+            allow read: if canAccessProject(wsId, projectId);
+            allow create: if canEditProject(wsId, projectId);
+            allow update, delete: if false;
+          }
+
+          // Comments
+          match /comments/{commentId} {
+            allow read: if canAccessProject(wsId, projectId);
+            allow create: if canAccessProject(wsId, projectId);
+            allow update: if isAuth() && request.auth.uid == resource.data.userId;
+          }
+        }
+
+        // Labels
+        match /labels/{labelId} {
+          allow read: if canAccessProject(wsId, projectId);
+          allow write: if canEditProject(wsId, projectId);
+        }
+
+        // Epics
+        match /epics/{epicId} {
+          allow read: if canAccessProject(wsId, projectId);
+          allow create, update: if canEditProject(wsId, projectId);
+          allow delete: if isProjectAdmin(wsId, projectId);
+        }
+
+        // Sprints
+        match /sprints/{sprintId} {
+          allow read: if canAccessProject(wsId, projectId);
+          allow create, update: if isProjectAdmin(wsId, projectId);
+          allow delete: if isProjectAdmin(wsId, projectId);
+        }
+
+        // Notes
+        match /notes/{noteId} {
+          allow read: if canAccessProject(wsId, projectId);
+          allow create, update: if canEditProject(wsId, projectId);
+          allow delete: if canEditProject(wsId, projectId);
+        }
+      }
+    }
+
+    // Invites — collectionGroup queries need a wildcard path rule
+    match /{path=**}/invites/{inviteId} {
+      allow read: if true;
+    }
+
+    // Events — collectionGroup queries for activity feeds
+    match /{path=**}/events/{eventId} {
+      allow read: if isAuth();
+    }
+
+    // User notifications
+    match /users/{userId}/notifications/{notifId} {
+      allow read, update: if isAuth() && request.auth.uid == userId;
+      allow create: if isAuth();
+    }
+  }
+}

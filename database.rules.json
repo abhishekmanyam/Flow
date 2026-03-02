@@ -1,0 +1,15 @@
+{
+  "rules": {
+    "presence": {
+      "$workspaceId": {
+        "$projectId": {
+          ".read": "auth != null",
+          "$uid": {
+            ".read": "auth != null",
+            ".write": "auth != null && auth.uid === $uid"
+          }
+        }
+      }
+    }
+  }
+}

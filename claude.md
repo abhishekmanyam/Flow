@@ -1,0 +1,1 @@
+only use shadcn for ui components and frontend. no custom css.
