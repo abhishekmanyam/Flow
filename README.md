@@ -1,5 +1,7 @@
 # Flow — Project Management with Memory
 
+> A Kanban-first project management tool for teams where every action leaves a permanent trail — so nothing is ever lost.
+
 A full-stack project management platform built for teams. The defining feature is **persistent memory** — every action, comment, and change is permanently recorded, giving teams a complete, queryable history of every project decision ever made.
 
 ## Tech Stack
