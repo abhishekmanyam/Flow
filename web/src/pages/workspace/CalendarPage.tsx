@@ -23,11 +23,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  ChevronUp,
   Plus,
   Clock,
   Search,
-  Tag,
   Filter,
   List,
   Settings,
@@ -50,7 +48,6 @@ import EventCategoryBadge from "@/components/calendar/EventCategoryBadge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
@@ -475,106 +472,34 @@ export default function CalendarPage() {
     <MotionPage className="p-4 space-y-3">
       {/* ── Header row ── */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={navigatePrev}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={navigatePrev}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={navigateNext}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
 
-          {viewMode === "month" ? (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-0.5">
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                <span className="font-semibold text-sm">
-                  {format(currentMonth, "MMMM")}
-                </span>
-                <div className="flex flex-col -space-y-1">
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground transition-colors p-0 leading-none"
-                    onClick={() =>
-                      setCurrentMonth((prev) => subMonths(prev, 1))
-                    }
-                  >
-                    <ChevronUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground transition-colors p-0 leading-none"
-                    onClick={() =>
-                      setCurrentMonth((prev) => addMonths(prev, 1))
-                    }
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center gap-0.5">
-                <span className="font-semibold text-sm">
-                  {format(currentMonth, "yyyy")}
-                </span>
-                <div className="flex flex-col -space-y-1">
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground transition-colors p-0 leading-none"
-                    onClick={() =>
-                      setCurrentMonth(
-                        (prev) =>
-                          new Date(
-                            prev.getFullYear() - 1,
-                            prev.getMonth(),
-                            1
-                          )
-                      )
-                    }
-                  >
-                    <ChevronUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    className="text-muted-foreground hover:text-foreground transition-colors p-0 leading-none"
-                    onClick={() =>
-                      setCurrentMonth(
-                        (prev) =>
-                          new Date(
-                            prev.getFullYear() + 1,
-                            prev.getMonth(),
-                            1
-                          )
-                      )
-                    }
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <span className="font-semibold text-sm px-2">
-              {headerLabel}
-            </span>
-          )}
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={navigateNext}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <h2 className="text-lg font-semibold tracking-tight">
+            {headerLabel}
+          </h2>
         </div>
 
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={goToToday}>
-            <CalendarDays className="mr-2 h-4 w-4" />
-            {viewMode === "month" || viewMode === "year"
-              ? "This month"
-              : "Today"}
+            Today
           </Button>
           {canEdit && (
             <Button
@@ -586,253 +511,26 @@ export default function CalendarPage() {
                 setCreateDialogOpen(true);
               }}
             >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Event
+              <Plus className="mr-1.5 h-4 w-4" />
+              Event
             </Button>
           )}
         </div>
       </div>
 
       {/* ── Toolbar row ── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Search */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant={searchQuery ? "secondary" : "outline"}
-              size="sm"
-            >
-              <Search className="mr-2 h-4 w-4" />
-              {searchQuery ? `"${searchQuery}"` : "Search Events"}
-              {searchQuery && (
-                <X
-                  className="ml-1.5 h-3 w-3"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSearchQuery("");
-                  }}
-                />
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-72 p-3" align="start">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">
-                Search events
-              </Label>
-              <Input
-                placeholder="Search by title, description, location..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
-              />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setSearchQuery("")}
-                >
-                  Clear search
-                </Button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        {/* Categories */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant={
-                selectedCategories.length > 0 ? "secondary" : "outline"
-              }
-              size="sm"
-            >
-              <Tag className="mr-2 h-4 w-4" />
-              Categories
-              {selectedCategories.length > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="ml-1.5 h-5 px-1.5 text-[10px]"
-                >
-                  {selectedCategories.length}
-                </Badge>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-56 p-3" align="start">
-            <div className="space-y-3">
-              <Label className="text-xs font-medium">
-                Filter by category
-              </Label>
-              {ALL_CATEGORIES.map((cat) => (
-                <div key={cat} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`cat-${cat}`}
-                    checked={selectedCategories.includes(cat)}
-                    onCheckedChange={() => toggleCategory(cat)}
-                  />
-                  <label
-                    htmlFor={`cat-${cat}`}
-                    className="flex items-center gap-2 text-sm cursor-pointer flex-1"
-                  >
-                    <span
-                      className="h-2.5 w-2.5 rounded-full shrink-0"
-                      style={{
-                        backgroundColor: EVENT_CATEGORY_COLORS[cat],
-                      }}
-                    />
-                    {EVENT_CATEGORY_LABELS[cat]}
-                  </label>
-                </div>
-              ))}
-              {selectedCategories.length > 0 && (
-                <>
-                  <Separator />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setSelectedCategories([])}
-                  >
-                    Clear all
-                  </Button>
-                </>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        {/* Colors */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant={
-                selectedColors.length > 0 ? "secondary" : "outline"
-              }
-              size="sm"
-            >
-              <div className="mr-2 h-3 w-3 rounded-full bg-purple-500" />
-              Colors
-              {selectedColors.length > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="ml-1.5 h-5 px-1.5 text-[10px]"
-                >
-                  {selectedColors.length}
-                </Badge>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-56 p-3" align="start">
-            <div className="space-y-3">
-              <Label className="text-xs font-medium">
-                Filter by color
-              </Label>
-              <div className="flex flex-wrap gap-2">
-                {eventColors.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={cn(
-                      "h-7 w-7 rounded-full transition-all flex items-center justify-center",
-                      selectedColors.includes(color)
-                        ? "ring-2 ring-offset-2 ring-primary scale-110"
-                        : "hover:scale-110"
-                    )}
-                    style={{ backgroundColor: color }}
-                    onClick={() => toggleColor(color)}
-                  >
-                    {selectedColors.includes(color) && (
-                      <Check className="h-3.5 w-3.5 text-white" />
-                    )}
-                  </button>
-                ))}
-              </div>
-              {eventColors.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  No events to filter
-                </p>
-              )}
-              {selectedColors.length > 0 && (
-                <>
-                  <Separator />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setSelectedColors([])}
-                  >
-                    Clear all
-                  </Button>
-                </>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        {/* Scope filter */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant={eventScope !== "all" ? "secondary" : "outline"}
-              size="sm"
-            >
-              <Filter className="mr-2 h-4 w-4" />
-              {SCOPE_LABELS[eventScope]}
-              <ChevronDown className="ml-1 h-3 w-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {(Object.keys(SCOPE_LABELS) as EventScope[]).map((scope) => (
-              <DropdownMenuItem
-                key={scope}
-                onClick={() => setEventScope(scope)}
-                className={cn(eventScope === scope && "font-semibold")}
-              >
-                {eventScope === scope && (
-                  <Check className="mr-2 h-4 w-4" />
-                )}
-                {SCOPE_LABELS[scope]}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* Active filter count */}
-        {activeFilterCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            onClick={() => {
-              setSearchQuery("");
-              setSelectedCategories([]);
-              setSelectedColors([]);
-              setEventScope("all");
-            }}
-          >
-            <X className="mr-1 h-3 w-3" />
-            Clear {activeFilterCount} filter
-            {activeFilterCount !== 1 ? "s" : ""}
-          </Button>
-        )}
-      </div>
-
-      {/* ── View switcher row ── */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 rounded-lg border p-1">
           {VIEW_LABELS.map(({ key, label }) =>
             key === "days" ? (
               <DropdownMenu key={key}>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant={viewMode === "days" ? "default" : "ghost"}
+                    variant={viewMode === "days" ? "secondary" : "ghost"}
                     size="sm"
-                    className="h-8"
+                    className="h-7 text-xs px-2.5"
                   >
-                    {label} ({daysCount})
+                    {daysCount}D
                     <ChevronDown className="ml-1 h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -853,10 +551,10 @@ export default function CalendarPage() {
             ) : (
               <Button
                 key={key}
-                variant={viewMode === key ? "default" : "ghost"}
+                variant={viewMode === key ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => setViewMode(key)}
-                className="h-8"
+                className="h-7 text-xs px-2.5"
               >
                 {label}
               </Button>
@@ -864,44 +562,197 @@ export default function CalendarPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant={use24h ? "secondary" : "outline"}
-            size="sm"
-            className="h-8"
-            onClick={() => setUse24h((v) => !v)}
-          >
-            <Clock className="mr-1.5 h-3.5 w-3.5" />
-            {use24h ? "24h" : "12h"}
-          </Button>
-          <div className="flex items-center rounded-md border">
+        <div className="flex items-center gap-1.5">
+          {/* Search */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={searchQuery ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3" align="end">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">
+                  Search events
+                </Label>
+                <Input
+                  placeholder="Title, description, location..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Filters */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={activeFilterCount > 0 ? "secondary" : "ghost"}
+                size="icon"
+                className="h-8 w-8 relative"
+              >
+                <Filter className="h-4 w-4" />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-0" align="end">
+              <div className="p-3 space-y-4">
+                {/* Scope */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium">Show</Label>
+                  <div className="flex gap-1">
+                    {(Object.keys(SCOPE_LABELS) as EventScope[]).map(
+                      (scope) => (
+                        <Button
+                          key={scope}
+                          variant={
+                            eventScope === scope ? "secondary" : "outline"
+                          }
+                          size="sm"
+                          className="h-7 text-xs flex-1"
+                          onClick={() => setEventScope(scope)}
+                        >
+                          {SCOPE_LABELS[scope].replace(" Events", "")}
+                        </Button>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Categories */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium">Categories</Label>
+                  <div className="space-y-1.5">
+                    {ALL_CATEGORIES.map((cat) => (
+                      <div key={cat} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`cat-${cat}`}
+                          checked={selectedCategories.includes(cat)}
+                          onCheckedChange={() => toggleCategory(cat)}
+                        />
+                        <label
+                          htmlFor={`cat-${cat}`}
+                          className="flex items-center gap-2 text-sm cursor-pointer flex-1"
+                        >
+                          <span
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{
+                              backgroundColor: EVENT_CATEGORY_COLORS[cat],
+                            }}
+                          />
+                          {EVENT_CATEGORY_LABELS[cat]}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Colors */}
+                {eventColors.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Colors</Label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {eventColors.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            className={cn(
+                              "h-6 w-6 rounded-full transition-all flex items-center justify-center",
+                              selectedColors.includes(color)
+                                ? "ring-2 ring-offset-2 ring-primary"
+                                : "hover:ring-1 hover:ring-offset-1 hover:ring-muted-foreground"
+                            )}
+                            style={{ backgroundColor: color }}
+                            onClick={() => toggleColor(color)}
+                          >
+                            {selectedColors.includes(color) && (
+                              <Check className="h-3 w-3 text-white" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Clear */}
+                {activeFilterCount > 0 && (
+                  <>
+                    <Separator />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setSelectedCategories([]);
+                        setSelectedColors([]);
+                        setEventScope("all");
+                      }}
+                    >
+                      <X className="mr-1.5 h-3 w-3" />
+                      Clear all filters
+                    </Button>
+                  </>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          <Separator orientation="vertical" className="h-5 mx-0.5" />
+
+          {/* Calendar / List toggle */}
+          <div className="flex items-center rounded-md border p-0.5">
             <Button
-              variant={!showListView ? "default" : "ghost"}
-              size="sm"
-              className="h-8 rounded-r-none border-0"
+              variant={!showListView ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
               onClick={() => setShowListView(false)}
             >
-              <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-              Calendar
+              <CalendarDays className="h-3.5 w-3.5" />
             </Button>
-            <Separator orientation="vertical" className="h-5" />
             <Button
-              variant={showListView ? "default" : "ghost"}
-              size="sm"
-              className="h-8 rounded-l-none border-0"
+              variant={showListView ? "secondary" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
               onClick={() => setShowListView(true)}
             >
               <List className="h-3.5 w-3.5" />
             </Button>
           </div>
+
+          {/* Settings */}
           <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => setSettingsOpen(true)}
           >
-            <Settings className="mr-1.5 h-3.5 w-3.5" />
-            Calendar Settings
+            <Settings className="h-4 w-4" />
           </Button>
         </div>
       </div>

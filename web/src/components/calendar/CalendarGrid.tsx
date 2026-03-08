@@ -67,7 +67,7 @@ export default function CalendarGrid({
   return (
     <div className="w-full">
       {/* Day headers */}
-      <div className="grid grid-cols-7 border-b">
+      <div className="grid grid-cols-7">
         {dayLabels.map((label) => (
           <div
             key={label}
@@ -81,12 +81,15 @@ export default function CalendarGrid({
       </div>
 
       {/* Day cells grid */}
-      <div className="grid grid-cols-7 border-l border-t">
+      <div className="grid grid-cols-7">
         {days.map((day) => {
           const dayEvents = getEventsForDay(events, day);
 
           return (
-            <div key={day.toISOString()} className="border-r border-b">
+            <div
+              key={day.toISOString()}
+              className={isCompact ? "" : "border-t border-r [&:nth-child(7n+1)]:border-l"}
+            >
               <CalendarDayCell
                 date={day}
                 events={dayEvents}
