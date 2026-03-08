@@ -10,7 +10,8 @@ import {
 import type { CalendarEvent } from "@/lib/types";
 import CalendarDayCell from "./CalendarDayCell";
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const SUNDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 interface CalendarGridProps {
   events: CalendarEvent[];
@@ -18,6 +19,9 @@ interface CalendarGridProps {
   selectedDate: Date | null;
   onDayClick: (date: Date) => void;
   onEventClick?: (event: CalendarEvent) => void;
+  onMoreClick?: (date: Date) => void;
+  weekStartsOn?: 0 | 1;
+  use24h?: boolean;
   variant?: "full" | "compact";
 }
 
@@ -45,21 +49,26 @@ export default function CalendarGrid({
   currentMonth,
   selectedDate,
   onDayClick,
+  onEventClick,
+  onMoreClick,
+  weekStartsOn = 0,
+  use24h = false,
   variant = "full",
 }: CalendarGridProps) {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
-  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const gridStart = startOfWeek(monthStart, { weekStartsOn });
+  const gridEnd = endOfWeek(monthEnd, { weekStartsOn });
 
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
   const isCompact = variant === "compact";
+  const dayLabels = weekStartsOn === 1 ? MONDAY_LABELS : SUNDAY_LABELS;
 
   return (
     <div className="w-full">
       {/* Day headers */}
-      <div className="grid grid-cols-7 mb-1">
-        {DAY_LABELS.map((label) => (
+      <div className="grid grid-cols-7 border-b">
+        {dayLabels.map((label) => (
           <div
             key={label}
             className={`text-center font-medium text-muted-foreground ${
@@ -72,12 +81,12 @@ export default function CalendarGrid({
       </div>
 
       {/* Day cells grid */}
-      <div className="grid grid-cols-7 gap-px rounded-lg bg-border overflow-hidden">
+      <div className="grid grid-cols-7 border-l border-t">
         {days.map((day) => {
           const dayEvents = getEventsForDay(events, day);
 
           return (
-            <div key={day.toISOString()} className="bg-background">
+            <div key={day.toISOString()} className="border-r border-b">
               <CalendarDayCell
                 date={day}
                 events={dayEvents}
@@ -86,6 +95,9 @@ export default function CalendarGrid({
                   selectedDate ? isSameDay(day, selectedDate) : false
                 }
                 onClick={() => onDayClick(day)}
+                onEventClick={onEventClick}
+                onMoreClick={() => onMoreClick?.(day)}
+                use24h={use24h}
                 compact={isCompact}
               />
             </div>
