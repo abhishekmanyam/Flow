@@ -376,6 +376,8 @@ export type RegistrationField = {
   placeholder?: string;
 };
 
+export type RepeatingType = "daily" | "weekly" | "monthly";
+
 export type CalendarEvent = {
   id: string;
   workspaceId: string;
@@ -387,6 +389,8 @@ export type CalendarEvent = {
   location: string | null;
   category: EventCategory;
   color: string;
+  isRepeating: boolean;
+  repeatingType: RepeatingType | null;
   isPublic: boolean;
   registrationOpen: boolean;
   maxRegistrations: number | null;

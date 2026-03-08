@@ -4,11 +4,12 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Timestamp } from "firebase/firestore";
 import { toast } from "sonner";
-import { Loader2, Globe, UserCheck } from "lucide-react";
+import { Loader2, Globe, UserCheck, Repeat } from "lucide-react";
 import type {
   CalendarEvent,
   EventCategory,
   RegistrationField,
+  RepeatingType,
 } from "@/lib/types";
 import {
   EVENT_CATEGORY_LABELS,
@@ -58,6 +59,8 @@ const eventFormSchema = z.object({
   location: z.string().optional(),
   category: z.enum(["meeting", "workshop", "webinar", "social", "other"]),
   color: z.string(),
+  isRepeating: z.boolean(),
+  repeatingType: z.enum(["daily", "weekly", "monthly"]).nullable(),
   isPublic: z.boolean(),
   registrationOpen: z.boolean(),
   maxRegistrations: z.string().optional(),
@@ -134,6 +137,8 @@ export default function CreateEventDialog({
       location: event?.location ?? "",
       category: event?.category ?? "meeting",
       color: event?.color ?? PROJECT_COLORS[0],
+      isRepeating: event?.isRepeating ?? false,
+      repeatingType: event?.repeatingType ?? null,
       isPublic: event?.isPublic ?? false,
       registrationOpen: event?.registrationOpen ?? false,
       maxRegistrations:
@@ -144,6 +149,7 @@ export default function CreateEventDialog({
   });
 
   const allDay = form.watch("allDay");
+  const isRepeating = form.watch("isRepeating");
   const isPublic = form.watch("isPublic");
   const selectedColor = form.watch("color");
 
@@ -175,6 +181,8 @@ export default function CreateEventDialog({
           location: values.location || null,
           category: values.category,
           color: values.color,
+          isRepeating: values.isRepeating,
+          repeatingType: values.isRepeating ? values.repeatingType as RepeatingType : null,
           isPublic: values.isPublic,
           registrationOpen: values.registrationOpen,
           maxRegistrations: maxReg,
@@ -192,6 +200,8 @@ export default function CreateEventDialog({
           location: values.location || null,
           category: values.category,
           color: values.color,
+          isRepeating: values.isRepeating,
+          repeatingType: values.isRepeating ? values.repeatingType as RepeatingType : null,
           isPublic: values.isPublic,
           registrationOpen: values.registrationOpen,
           maxRegistrations: maxReg,
@@ -346,6 +356,63 @@ export default function CreateEventDialog({
                 />
               )}
             </div>
+
+            {/* ── Recurrence ── */}
+            <FormField
+              control={form.control}
+              name="isRepeating"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-lg border p-3">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={(checked) => {
+                        field.onChange(checked);
+                        if (!checked) form.setValue("repeatingType", null);
+                        else form.setValue("repeatingType", "weekly");
+                      }}
+                    />
+                  </FormControl>
+                  <div className="space-y-0.5">
+                    <FormLabel className="flex items-center gap-1.5">
+                      <Repeat className="h-3.5 w-3.5" />
+                      Recurring event
+                    </FormLabel>
+                    <p className="text-xs text-muted-foreground">
+                      This event repeats on a schedule
+                    </p>
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            {isRepeating && (
+              <FormField
+                control={form.control}
+                name="repeatingType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Repeat frequency</FormLabel>
+                    <Select
+                      value={field.value ?? "weekly"}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {/* ── Details ── */}
             <Separator />

@@ -10,6 +10,7 @@ import {
   Globe,
   Users,
   ExternalLink,
+  Repeat,
 } from "lucide-react";
 import type { CalendarEvent } from "@/lib/types";
 import { deleteCalendarEvent } from "@/lib/firestore";
@@ -51,7 +52,8 @@ interface EventDetailSheetProps {
   workspaceName: string;
   userId: string;
   event: CalendarEvent;
-  canManage: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 function toDate(val: unknown): Date {
@@ -72,7 +74,8 @@ export default function EventDetailSheet({
   workspaceName,
   userId,
   event,
-  canManage,
+  canEdit,
+  canDelete,
 }: EventDetailSheetProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -93,7 +96,7 @@ export default function EventDetailSheet({
     }
   };
 
-  const showRegistrationsTab = event.isPublic && canManage;
+  const showRegistrationsTab = event.isPublic && canEdit;
 
   return (
     <>
@@ -180,6 +183,22 @@ export default function EventDetailSheet({
                     </div>
                   )}
 
+                  {event.isRepeating && event.repeatingType && (
+                    <div className="flex items-start gap-3">
+                      <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Repeat className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium capitalize">
+                          {event.repeatingType}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Recurrence
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {event.location && (
                     <div className="flex items-start gap-3">
                       <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
@@ -247,7 +266,7 @@ export default function EventDetailSheet({
                 </div>
 
                 {/* Public link */}
-                {event.isPublic && canManage && (
+                {event.isPublic && canEdit && (
                   <>
                     <Separator />
                     <div className="space-y-2">
@@ -283,7 +302,7 @@ export default function EventDetailSheet({
               )}
             </Tabs>
 
-            {canManage && (
+            {canEdit && (
               <>
                 <Separator className="my-4" />
                 <div className="flex gap-2">
@@ -296,33 +315,35 @@ export default function EventDetailSheet({
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
                   </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm">
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete event</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete &quot;{event.title}
-                          &quot;? This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          variant="destructive"
-                          onClick={handleDelete}
-                          disabled={deleting}
-                        >
-                          {deleting ? "Deleting..." : "Delete"}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  {canDelete && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete event</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete &quot;{event.title}
+                            &quot;? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            variant="destructive"
+                            onClick={handleDelete}
+                            disabled={deleting}
+                          >
+                            {deleting ? "Deleting..." : "Delete"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
               </>
             )}
