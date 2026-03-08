@@ -395,14 +395,16 @@ export default function CalendarPage() {
       )}
 
       {/* Dialogs/Sheets */}
-      <CreateEventDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-        wsId={workspace?.id ?? ""}
-        workspaceName={workspace?.name ?? ""}
-        userId={user?.uid ?? ""}
-        defaultDate={createDefaultDate}
-      />
+      {createDialogOpen && (
+        <CreateEventDialog
+          open
+          onOpenChange={setCreateDialogOpen}
+          wsId={workspace?.id ?? ""}
+          workspaceName={workspace?.name ?? ""}
+          userId={user?.uid ?? ""}
+          defaultDate={createDefaultDate}
+        />
+      )}
       {selectedEvent && (
         <EventDetailSheet
           open={detailSheetOpen}
