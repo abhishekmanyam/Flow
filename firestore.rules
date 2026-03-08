@@ -61,7 +61,26 @@ service cloud.firestore {
           getRole(wsId) in ['admin', 'manager', 'hr']
         );
         allow create: if isWorkspaceMember(wsId) && request.resource.data.userId == request.auth.uid;
-        allow update: if isWorkspaceMember(wsId) && resource.data.userId == request.auth.uid;
+        allow update: if isWorkspaceMember(wsId) && (
+          resource.data.userId == request.auth.uid ||
+          getRole(wsId) in ['admin', 'manager', 'hr']
+        );
+      }
+
+      // Calendar Events
+      match /calendar_events/{eventId} {
+        allow read: if isWorkspaceMember(wsId)
+                    || resource.data.isPublic == true;
+        allow create, update, delete: if isWorkspaceMember(wsId)
+                                      && getRole(wsId) in ['admin', 'manager'];
+
+        // Registrations (public create, admin/manager read, immutable)
+        match /registrations/{regId} {
+          allow read: if isWorkspaceMember(wsId)
+                      && getRole(wsId) in ['admin', 'manager'];
+          allow create: if true;
+          allow update, delete: if false;
+        }
       }
 
       // Invites
