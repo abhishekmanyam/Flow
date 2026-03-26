@@ -96,6 +96,13 @@ service cloud.firestore {
           allow create: if true;
           allow update, delete: if false;
         }
+
+        // RSVPs (workspace members can read, users can manage their own)
+        match /rsvps/{userId} {
+          allow read: if isWorkspaceMember(wsId);
+          allow create, update: if isAuth() && request.auth.uid == userId;
+          allow delete: if isAuth() && request.auth.uid == userId;
+        }
       }
 
       // Invites

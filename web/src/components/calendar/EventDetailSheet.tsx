@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { format } from "date-fns";
+import { useState, useEffect } from "react";
+import { format, startOfDay, isBefore } from "date-fns";
 import { toast } from "sonner";
 import {
   MapPin,
@@ -11,9 +11,20 @@ import {
   Users,
   ExternalLink,
   Repeat,
+  CircleDashed,
+  Check,
+  X,
+  HelpCircle,
 } from "lucide-react";
-import type { CalendarEvent } from "@/lib/types";
-import { deleteCalendarEvent } from "@/lib/firestore";
+import { Timestamp } from "firebase/firestore";
+import type { CalendarEvent, EventRSVP, RSVPStatus } from "@/lib/types";
+import {
+  deleteCalendarEvent,
+  excludeCalendarEventOccurrence,
+  submitRSVP,
+  subscribeToEventRSVPs,
+} from "@/lib/firestore";
+import { useAuthStore } from "@/store/auth";
 import {
   Sheet,
   SheetContent,
@@ -79,24 +90,101 @@ export default function EventDetailSheet({
   canDelete,
   canViewRegistrations,
 }: EventDetailSheetProps) {
+  const { user } = useAuthStore();
   const [editOpen, setEditOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [rsvps, setRsvps] = useState<EventRSVP[]>([]);
+  const [myRsvpStatus, setMyRsvpStatus] = useState<RSVPStatus | null>(null);
+  const [rsvpLoading, setRsvpLoading] = useState(false);
 
   const startDate = toDate(event.startDate);
   const endDate = toDate(event.endDate);
 
-  const handleDelete = async () => {
+  // RSVP subscription
+  const rsvpEventId = event.isRepeating && event.id.includes("_")
+    ? event.id.substring(0, event.id.lastIndexOf("_"))
+    : event.id;
+
+  useEffect(() => {
+    if (!event.rsvpEnabled) return;
+    const unsub = subscribeToEventRSVPs(wsId, rsvpEventId, (data) => {
+      setRsvps(data);
+      const mine = data.find((r) => r.userId === user?.uid);
+      setMyRsvpStatus(mine?.status ?? null);
+    });
+    return unsub;
+  }, [wsId, rsvpEventId, event.rsvpEnabled, user?.uid]);
+
+  const handleRsvp = async (status: RSVPStatus) => {
+    if (!user?.uid) return;
+    setRsvpLoading(true);
+    try {
+      await submitRSVP(wsId, rsvpEventId, user.uid, status);
+      toast.success(
+        status === "accepted" ? "Accepted" : status === "declined" ? "Declined" : "Marked as tentative"
+      );
+    } catch {
+      toast.error("Failed to update RSVP");
+    } finally {
+      setRsvpLoading(false);
+    }
+  };
+
+  const rsvpDeadlinePassed = event.rsvpDeadline
+    ? isBefore(toDate(event.rsvpDeadline), new Date())
+    : false;
+
+  // Occurrence IDs look like "baseId_timestamp"
+  const isOccurrence = event.isRepeating && event.id.includes("_");
+  const baseEventId = isOccurrence
+    ? event.id.substring(0, event.id.lastIndexOf("_"))
+    : event.id;
+
+  const handleDeleteSeries = async () => {
     setDeleting(true);
     try {
-      await deleteCalendarEvent(wsId, event.id);
-      toast.success("Event deleted");
+      await deleteCalendarEvent(wsId, baseEventId);
+      toast.success("Entire series deleted");
       onOpenChange(false);
     } catch {
-      toast.error("Failed to delete event");
+      toast.error("Failed to delete series");
     } finally {
       setDeleting(false);
     }
   };
+
+  const handleDeleteOccurrence = async () => {
+    setDeleting(true);
+    try {
+      const dayStart = startOfDay(startDate);
+      await excludeCalendarEventOccurrence(
+        wsId,
+        baseEventId,
+        Timestamp.fromDate(dayStart)
+      );
+      toast.success("Occurrence removed");
+      onOpenChange(false);
+    } catch {
+      toast.error("Failed to remove occurrence");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDelete = event.isRepeating
+    ? handleDeleteSeries
+    : async () => {
+        setDeleting(true);
+        try {
+          await deleteCalendarEvent(wsId, event.id);
+          toast.success("Event deleted");
+          onOpenChange(false);
+        } catch {
+          toast.error("Failed to delete event");
+        } finally {
+          setDeleting(false);
+        }
+      };
 
   const showRegistrationsTab = event.isPublic && canViewRegistrations;
 
@@ -195,7 +283,9 @@ export default function EventDetailSheet({
                           {event.repeatingType}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Recurrence
+                          {event.repeatingEndDate
+                            ? `Until ${format(toDate(event.repeatingEndDate), "MMM d, yyyy")}`
+                            : "Repeats indefinitely"}
                         </p>
                       </div>
                     </div>
@@ -229,6 +319,105 @@ export default function EventDetailSheet({
                       <p className="text-sm whitespace-pre-wrap leading-relaxed">
                         {event.description}
                       </p>
+                    </div>
+                  </>
+                )}
+
+                {/* RSVP */}
+                {event.rsvpEnabled && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          RSVP
+                        </p>
+                        {event.isOptional && (
+                          <Badge variant="outline" className="gap-1">
+                            <CircleDashed className="h-3 w-3" />
+                            Optional
+                          </Badge>
+                        )}
+                      </div>
+
+                      {rsvpDeadlinePassed ? (
+                        <p className="text-xs text-muted-foreground">
+                          RSVP deadline has passed
+                        </p>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant={myRsvpStatus === "accepted" ? "default" : "outline"}
+                            className="flex-1 gap-1.5"
+                            disabled={rsvpLoading}
+                            onClick={() => handleRsvp("accepted")}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={myRsvpStatus === "tentative" ? "default" : "outline"}
+                            className="flex-1 gap-1.5"
+                            disabled={rsvpLoading}
+                            onClick={() => handleRsvp("tentative")}
+                          >
+                            <HelpCircle className="h-3.5 w-3.5" />
+                            Maybe
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={myRsvpStatus === "declined" ? "destructive" : "outline"}
+                            className="flex-1 gap-1.5"
+                            disabled={rsvpLoading}
+                            onClick={() => handleRsvp("declined")}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                            Decline
+                          </Button>
+                        </div>
+                      )}
+
+                      {event.rsvpDeadline && !rsvpDeadlinePassed && (
+                        <p className="text-xs text-muted-foreground">
+                          RSVP by {format(toDate(event.rsvpDeadline), "MMM d, yyyy")}
+                        </p>
+                      )}
+
+                      {/* RSVP summary for admins */}
+                      {canViewRegistrations && rsvps.length > 0 && (
+                        <div className="flex gap-3 text-xs text-muted-foreground pt-1">
+                          <span className="flex items-center gap-1">
+                            <Check className="h-3 w-3 text-green-500" />
+                            {rsvps.filter((r) => r.status === "accepted").length} accepted
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <HelpCircle className="h-3 w-3 text-yellow-500" />
+                            {rsvps.filter((r) => r.status === "tentative").length} maybe
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <X className="h-3 w-3 text-red-500" />
+                            {rsvps.filter((r) => r.status === "declined").length} declined
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Optional badge (if not RSVP-enabled but still optional) */}
+                {!event.rsvpEnabled && event.isOptional && (
+                  <>
+                    <Separator />
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="gap-1">
+                        <CircleDashed className="h-3 w-3" />
+                        Optional event
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        Shows as tentative in external calendars
+                      </span>
                     </div>
                   </>
                 )}
@@ -329,19 +518,39 @@ export default function EventDetailSheet({
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete event</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Are you sure you want to delete &quot;{event.title}
-                            &quot;? This action cannot be undone.
+                            {event.isRepeating
+                              ? `Do you want to remove just this occurrence (${format(startDate, "MMM d")}) or delete the entire series?`
+                              : `Are you sure you want to delete "${event.title}"? This action cannot be undone.`}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            variant="destructive"
-                            onClick={handleDelete}
-                            disabled={deleting}
-                          >
-                            {deleting ? "Deleting..." : "Delete"}
-                          </AlertDialogAction>
+                          {event.isRepeating ? (
+                            <>
+                              <AlertDialogAction
+                                variant="outline"
+                                onClick={handleDeleteOccurrence}
+                                disabled={deleting}
+                              >
+                                This occurrence
+                              </AlertDialogAction>
+                              <AlertDialogAction
+                                variant="destructive"
+                                onClick={handleDeleteSeries}
+                                disabled={deleting}
+                              >
+                                Entire series
+                              </AlertDialogAction>
+                            </>
+                          ) : (
+                            <AlertDialogAction
+                              variant="destructive"
+                              onClick={handleDelete}
+                              disabled={deleting}
+                            >
+                              {deleting ? "Deleting..." : "Delete"}
+                            </AlertDialogAction>
+                          )}
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>

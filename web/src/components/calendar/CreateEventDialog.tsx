@@ -4,7 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Timestamp } from "firebase/firestore";
 import { toast } from "sonner";
-import { Loader2, Globe, UserCheck, Repeat } from "lucide-react";
+import { Loader2, Globe, UserCheck, Repeat, CalendarCheck, CircleDashed } from "lucide-react";
 import type {
   CalendarEvent,
   EventCategory,
@@ -61,6 +61,10 @@ const eventFormSchema = z.object({
   color: z.string(),
   isRepeating: z.boolean(),
   repeatingType: z.enum(["daily", "weekly", "monthly"]).nullable(),
+  repeatingEndDate: z.string().optional(),
+  rsvpEnabled: z.boolean(),
+  rsvpDeadline: z.string().optional(),
+  isOptional: z.boolean(),
   isPublic: z.boolean(),
   registrationOpen: z.boolean(),
   maxRegistrations: z.string().optional(),
@@ -139,6 +143,14 @@ export default function CreateEventDialog({
       color: event?.color ?? PROJECT_COLORS[0],
       isRepeating: event?.isRepeating ?? false,
       repeatingType: event?.repeatingType ?? null,
+      repeatingEndDate: event?.repeatingEndDate
+        ? formatDateForInput(toDate(event.repeatingEndDate))
+        : "",
+      rsvpEnabled: event?.rsvpEnabled ?? false,
+      rsvpDeadline: event?.rsvpDeadline
+        ? formatDateForInput(toDate(event.rsvpDeadline))
+        : "",
+      isOptional: event?.isOptional ?? false,
       isPublic: event?.isPublic ?? false,
       registrationOpen: event?.registrationOpen ?? false,
       maxRegistrations:
@@ -150,6 +162,7 @@ export default function CreateEventDialog({
 
   const allDay = form.watch("allDay");
   const isRepeating = form.watch("isRepeating");
+  const rsvpEnabled = form.watch("rsvpEnabled");
   const isPublic = form.watch("isPublic");
   const selectedColor = form.watch("color");
 
@@ -183,6 +196,16 @@ export default function CreateEventDialog({
           color: values.color,
           isRepeating: values.isRepeating,
           repeatingType: values.isRepeating ? values.repeatingType as RepeatingType : null,
+          repeatingEndDate:
+            values.isRepeating && values.repeatingEndDate
+              ? Timestamp.fromDate(new Date(`${values.repeatingEndDate}T23:59:59`))
+              : null,
+          rsvpEnabled: values.rsvpEnabled,
+          rsvpDeadline:
+            values.rsvpEnabled && values.rsvpDeadline
+              ? Timestamp.fromDate(new Date(`${values.rsvpDeadline}T23:59:59`))
+              : null,
+          isOptional: values.isOptional,
           isPublic: values.isPublic,
           registrationOpen: values.registrationOpen,
           maxRegistrations: maxReg,
@@ -202,9 +225,20 @@ export default function CreateEventDialog({
           color: values.color,
           isRepeating: values.isRepeating,
           repeatingType: values.isRepeating ? values.repeatingType as RepeatingType : null,
+          repeatingEndDate:
+            values.isRepeating && values.repeatingEndDate
+              ? Timestamp.fromDate(new Date(`${values.repeatingEndDate}T23:59:59`))
+              : null,
+          rsvpEnabled: values.rsvpEnabled,
+          rsvpDeadline:
+            values.rsvpEnabled && values.rsvpDeadline
+              ? Timestamp.fromDate(new Date(`${values.rsvpDeadline}T23:59:59`))
+              : null,
+          isOptional: values.isOptional,
           isPublic: values.isPublic,
           registrationOpen: values.registrationOpen,
           maxRegistrations: maxReg,
+          excludedDates: [],
           registrationFields,
           workspaceName,
           createdBy: userId,
@@ -387,32 +421,124 @@ export default function CreateEventDialog({
             />
 
             {isRepeating && (
+              <div className="space-y-3">
+                <FormField
+                  control={form.control}
+                  name="repeatingType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Repeat frequency</FormLabel>
+                      <Select
+                        value={field.value ?? "weekly"}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="repeatingEndDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Repeat until (optional)</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Leave empty to repeat indefinitely
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            {/* ── RSVP & Optional ── */}
+            <Separator />
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              RSVP & Attendance
+            </p>
+
+            <FormField
+              control={form.control}
+              name="rsvpEnabled"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-lg border p-3">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-0.5">
+                    <FormLabel className="flex items-center gap-1.5">
+                      <CalendarCheck className="h-3.5 w-3.5" />
+                      Enable RSVP
+                    </FormLabel>
+                    <p className="text-xs text-muted-foreground">
+                      Allow members to accept, decline, or mark as tentative
+                    </p>
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            {rsvpEnabled && (
               <FormField
                 control={form.control}
-                name="repeatingType"
+                name="rsvpDeadline"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Repeat frequency</FormLabel>
-                    <Select
-                      value={field.value ?? "weekly"}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="daily">Daily</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>RSVP deadline (optional)</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      Leave empty for no deadline
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             )}
+
+            <FormField
+              control={form.control}
+              name="isOptional"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-lg border p-3">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-0.5">
+                    <FormLabel className="flex items-center gap-1.5">
+                      <CircleDashed className="h-3.5 w-3.5" />
+                      Optional event
+                    </FormLabel>
+                    <p className="text-xs text-muted-foreground">
+                      Shows as tentative in external calendars
+                    </p>
+                  </div>
+                </FormItem>
+              )}
+            />
 
             {/* ── Details ── */}
             <Separator />

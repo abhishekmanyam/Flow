@@ -42,6 +42,7 @@ import type {
   Sprint,
   ClockEntry,
   CalendarEvent,
+  EventRSVP,
   EventRegistration,
   SprintStatus,
   Role,
@@ -155,6 +156,10 @@ export const registrationsCol = (wsId: string, eventId: string) =>
   collection(db, "workspaces", wsId, "calendar_events", eventId, "registrations");
 export const registrationDoc = (wsId: string, eventId: string, regId: string) =>
   doc(db, "workspaces", wsId, "calendar_events", eventId, "registrations", regId);
+export const rsvpsCol = (wsId: string, eventId: string) =>
+  collection(db, "workspaces", wsId, "calendar_events", eventId, "rsvps");
+export const rsvpDoc = (wsId: string, eventId: string, userId: string) =>
+  doc(db, "workspaces", wsId, "calendar_events", eventId, "rsvps", userId);
 
 // ─── Workspace ops ────────────────────────────────────────────────────────────
 
@@ -1433,6 +1438,17 @@ export async function updateCalendarEvent(
   });
 }
 
+export async function excludeCalendarEventOccurrence(
+  wsId: string,
+  eventId: string,
+  date: import("firebase/firestore").Timestamp
+): Promise<void> {
+  await updateDoc(calendarEventDoc(wsId, eventId), {
+    excludedDates: arrayUnion(date),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function deleteCalendarEvent(
   wsId: string,
   eventId: string
@@ -1520,5 +1536,40 @@ export async function getWorkspaceName(wsId: string): Promise<string | null> {
   const snap = await getDoc(workspaceDoc(wsId));
   if (!snap.exists()) return null;
   return (snap.data() as Workspace).name;
+}
+
+// ─── Event RSVPs ─────────────────────────────────────────────────────────────
+
+export async function submitRSVP(
+  wsId: string,
+  eventId: string,
+  userId: string,
+  status: import("./types").RSVPStatus
+): Promise<void> {
+  await setDoc(rsvpDoc(wsId, eventId, userId), {
+    userId,
+    status,
+    respondedAt: serverTimestamp(),
+  });
+}
+
+export function subscribeToEventRSVPs(
+  wsId: string,
+  eventId: string,
+  callback: (rsvps: EventRSVP[]) => void
+) {
+  return onSnapshot(rsvpsCol(wsId, eventId), (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as EventRSVP));
+  });
+}
+
+export async function getMyRSVP(
+  wsId: string,
+  eventId: string,
+  userId: string
+): Promise<EventRSVP | null> {
+  const snap = await getDoc(rsvpDoc(wsId, eventId, userId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as EventRSVP;
 }
 

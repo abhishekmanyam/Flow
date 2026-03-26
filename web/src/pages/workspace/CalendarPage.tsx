@@ -7,7 +7,6 @@ import {
   subWeeks,
   addMonths,
   subMonths,
-  isSameMonth,
   isSameDay,
   isAfter,
   isBefore,
@@ -16,7 +15,6 @@ import {
   endOfMonth,
   startOfWeek,
   endOfWeek,
-  eachDayOfInterval,
 } from "date-fns";
 import {
   CalendarDays,
@@ -32,6 +30,8 @@ import {
   X,
   MapPin,
   Check,
+  Download,
+  Link2,
 } from "lucide-react";
 import type { CalendarEvent, EventCategory } from "@/lib/types";
 import {
@@ -41,7 +41,9 @@ import {
 import { useAuthStore } from "@/store/auth";
 import { subscribeToCalendarEvents } from "@/lib/firestore";
 import { MotionPage } from "@/components/ui/motion-page";
-import CalendarGrid from "@/components/calendar/CalendarGrid";
+import { toast } from "sonner";
+import FullCalendarView from "@/components/calendar/FullCalendarView";
+import { downloadICS } from "@/lib/ics";
 import CreateEventDialog from "@/components/calendar/CreateEventDialog";
 import EventDetailSheet from "@/components/calendar/EventDetailSheet";
 import EventCategoryBadge from "@/components/calendar/EventCategoryBadge";
@@ -97,11 +99,20 @@ function expandRecurringEvents(
 ): CalendarEvent[] {
   const result: CalendarEvent[] = [];
   for (const event of events) {
-    result.push(event);
-    if (!event.isRepeating || !event.repeatingType) continue;
+    const excluded = (event.excludedDates ?? []).map((d) =>
+      toDate(d).getTime()
+    );
     const eventStart = toDate(event.startDate);
+    // Skip the original occurrence if it's excluded
+    if (!excluded.includes(startOfDay(eventStart).getTime())) {
+      result.push(event);
+    }
+    if (!event.isRepeating || !event.repeatingType) continue;
     const eventEnd = toDate(event.endDate);
     const duration = eventEnd.getTime() - eventStart.getTime();
+    const repeatUntil = event.repeatingEndDate
+      ? toDate(event.repeatingEndDate)
+      : null;
     const addFn =
       event.repeatingType === "daily"
         ? addDays
@@ -111,21 +122,25 @@ function expandRecurringEvents(
     let occurrence = addFn(eventStart, 1);
     let count = 0;
     while (isBefore(occurrence, rangeEnd) && count < 90) {
+      if (repeatUntil && isAfter(occurrence, repeatUntil)) break;
       if (
         isAfter(occurrence, rangeStart) ||
         isSameDay(occurrence, rangeStart)
       ) {
-        const occEnd = new Date(occurrence.getTime() + duration);
-        result.push({
-          ...event,
-          id: `${event.id}_${occurrence.getTime()}`,
-          startDate: {
-            toDate: () => occurrence,
-          } as unknown as import("firebase/firestore").Timestamp,
-          endDate: {
-            toDate: () => occEnd,
-          } as unknown as import("firebase/firestore").Timestamp,
-        });
+        if (!excluded.includes(startOfDay(occurrence).getTime())) {
+          const occStart = occurrence;
+          const occEnd = new Date(occStart.getTime() + duration);
+          result.push({
+            ...event,
+            id: `${event.id}_${occStart.getTime()}`,
+            startDate: {
+              toDate: () => occStart,
+            } as unknown as import("firebase/firestore").Timestamp,
+            endDate: {
+              toDate: () => occEnd,
+            } as unknown as import("firebase/firestore").Timestamp,
+          });
+        }
       }
       occurrence = addFn(occurrence, 1);
       count++;
@@ -279,29 +294,6 @@ export default function CalendarPage() {
     selectedColors.length +
     (eventScope !== "all" ? 1 : 0);
 
-  // ── Day view events ──
-  const dayViewEvents = useMemo(() => {
-    return filteredEvents
-      .filter((e) => isSameDay(toDate(e.startDate), selectedDate))
-      .sort(
-        (a, b) =>
-          toDate(a.startDate).getTime() - toDate(b.startDate).getTime()
-      );
-  }, [filteredEvents, selectedDate]);
-
-  // ── Week / Days view dates ──
-  const multiDayDates = useMemo(() => {
-    if (viewMode === "week") {
-      const weekStart = startOfWeek(selectedDate, { weekStartsOn });
-      const weekEnd = endOfWeek(selectedDate, { weekStartsOn });
-      return eachDayOfInterval({ start: weekStart, end: weekEnd });
-    }
-    // days mode — show daysCount days from selected date
-    return Array.from({ length: daysCount }, (_, i) =>
-      addDays(selectedDate, i)
-    );
-  }, [viewMode, selectedDate, weekStartsOn, daysCount]);
-
   // ── List view events (current month) ──
   const listViewEvents = useMemo(() => {
     const ms = startOfMonth(currentMonth);
@@ -418,11 +410,6 @@ export default function CalendarPage() {
   const openEventDetail = (event: CalendarEvent) => {
     setSelectedEvent(event);
     setDetailSheetOpen(true);
-  };
-
-  const handleMoreClick = (date: Date) => {
-    setSelectedDate(date);
-    setViewMode("day");
   };
 
   // ── Category toggle ──
@@ -796,177 +783,21 @@ export default function CalendarPage() {
             </div>
           )}
         </div>
-      ) : viewMode === "day" ? (
-        // ── Day View ──
-        <div className="rounded-lg border">
-          <div className="px-4 py-3 border-b bg-muted/30">
-            <p className="text-sm font-semibold">
-              {format(selectedDate, "EEEE, MMMM d, yyyy")}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {dayViewEvents.length} event
-              {dayViewEvents.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-          {dayViewEvents.length === 0 ? (
-            <div className="p-8 text-center">
-              <CalendarDays className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No events on this day
-              </p>
-              {canCreate && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => {
-                    setCreateDefaultDate(selectedDate);
-                    setCreateDialogOpen(true);
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Event
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="divide-y">
-              {dayViewEvents.map(renderEventRow)}
-            </div>
-          )}
-        </div>
-      ) : viewMode === "week" || viewMode === "days" ? (
-        // ── Week / Multi-Day View ──
-        <div className="rounded-lg border overflow-hidden">
-          <div className="grid border-b" style={{ gridTemplateColumns: `repeat(${multiDayDates.length}, 1fr)` }}>
-            {multiDayDates.map((day) => (
-              <div
-                key={day.toISOString()}
-                className={cn(
-                  "text-center py-2 text-xs font-medium border-r last:border-r-0",
-                  isSameDay(day, new Date())
-                    ? "text-primary font-semibold"
-                    : "text-muted-foreground"
-                )}
-              >
-                <div>{format(day, "EEE")}</div>
-                <div
-                  className={cn(
-                    "text-lg font-semibold mt-0.5",
-                    isSameDay(day, new Date()) && "text-primary"
-                  )}
-                >
-                  {format(day, "d")}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="grid min-h-[400px]" style={{ gridTemplateColumns: `repeat(${multiDayDates.length}, 1fr)` }}>
-            {multiDayDates.map((day) => {
-              const dayEvents = filteredEvents
-                .filter((e) => isSameDay(toDate(e.startDate), day))
-                .sort(
-                  (a, b) =>
-                    toDate(a.startDate).getTime() -
-                    toDate(b.startDate).getTime()
-                );
-              return (
-                <div
-                  key={day.toISOString()}
-                  className="border-r last:border-r-0 p-1.5 space-y-1"
-                >
-                  {dayEvents.map((event) => (
-                    <button
-                      key={event.id}
-                      type="button"
-                      className="w-full text-left rounded-md px-2 py-1.5 text-[11px] text-white"
-                      style={{ backgroundColor: event.color }}
-                      onClick={() => openEventDetail(event)}
-                    >
-                      <div className="font-medium truncate leading-tight">
-                        {event.title}
-                      </div>
-                      <div className="flex items-center gap-1 opacity-90 leading-tight mt-0.5">
-                        <Clock className="h-2.5 w-2.5 shrink-0" />
-                        <span className="truncate">
-                          {formatEventTime(event)}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                  {dayEvents.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground text-center pt-4">
-                      No events
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : viewMode === "year" ? (
-        // ── Year View ──
-        <div className="grid grid-cols-3 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 12 }, (_, i) => {
-            const monthDate = new Date(
-              currentMonth.getFullYear(),
-              i,
-              1
-            );
-            return (
-              <button
-                key={i}
-                type="button"
-                className={cn(
-                  "rounded-lg border p-2 text-left hover:border-primary/50 transition-colors",
-                  isSameMonth(monthDate, new Date()) &&
-                    "border-primary/30 bg-primary/5"
-                )}
-                onClick={() => {
-                  setCurrentMonth(monthDate);
-                  setViewMode("month");
-                }}
-              >
-                <p className="text-xs font-semibold mb-1 px-1">
-                  {format(monthDate, "MMMM")}
-                </p>
-                <CalendarGrid
-                  events={filteredEvents}
-                  currentMonth={monthDate}
-                  selectedDate={selectedDate}
-                  onDayClick={(date) => {
-                    setSelectedDate(date);
-                    setCurrentMonth(monthDate);
-                    setViewMode("month");
-                  }}
-                  weekStartsOn={weekStartsOn}
-                  use24h={use24h}
-                  variant="compact"
-                />
-              </button>
-            );
-          })}
-        </div>
       ) : (
-        // ── Month View (default) ──
-        <div className="rounded-lg border overflow-hidden">
-          <CalendarGrid
-            events={filteredEvents}
-            currentMonth={currentMonth}
-            selectedDate={selectedDate}
-            onDayClick={(date) => {
-              if (isSameDay(date, selectedDate)) {
-                setSelectedDate(new Date());
-              } else {
-                setSelectedDate(date);
-              }
-            }}
-            onEventClick={openEventDetail}
-            onMoreClick={handleMoreClick}
-            weekStartsOn={weekStartsOn}
-            use24h={use24h}
-          />
-        </div>
+        // ── Calendar View (FullCalendar) ──
+        <FullCalendarView
+          events={filteredEvents}
+          viewMode={viewMode}
+          daysCount={daysCount}
+          currentDate={viewMode === "month" || viewMode === "year" ? currentMonth : selectedDate}
+          weekStartsOn={weekStartsOn}
+          use24h={use24h}
+          onEventClick={openEventDetail}
+          onDateClick={(date) => {
+            setSelectedDate(date);
+            setCreateDefaultDate(date);
+          }}
+        />
       )}
 
       {/* ── Calendar Settings Sheet ── */}
@@ -1051,6 +882,53 @@ export default function CalendarPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <Separator />
+
+            {/* ── Calendar Export ── */}
+            <div className="space-y-3">
+              <Label>Calendar export</Label>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => {
+                  downloadICS(events, (workspace?.name ?? "Calendar") + " Calendar");
+                  toast.success("Calendar downloaded");
+                }}
+              >
+                <Download className="h-4 w-4" />
+                Download .ics file
+              </Button>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">
+                  Subscribe URL (for Google Calendar / Outlook)
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={`${window.location.origin}/api/calendar/${workspace?.id ?? ""}/events.ics`}
+                    className="text-xs"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${window.location.origin}/api/calendar/${workspace?.id ?? ""}/events.ics`
+                      );
+                      toast.success("Link copied");
+                    }}
+                  >
+                    <Link2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Paste this URL in Google Calendar (Other calendars → From URL) or Outlook (Add calendar → Subscribe from web)
+                </p>
+              </div>
             </div>
           </div>
         </SheetContent>

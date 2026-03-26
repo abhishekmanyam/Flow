@@ -1,4 +1,4 @@
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
@@ -99,4 +99,108 @@ export const autoClockOut = onSchedule("every 30 minutes", async () => {
 
   await batch.commit();
   console.log(`autoClockOut: committed ${staleSnap.size} updates`);
+});
+
+// ─── ICS Calendar Feed ────────────────────────────────────────────────────────
+
+function formatICSDate(date: Date, allDay: boolean): string {
+  if (allDay) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}${m}${d}`;
+  }
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+function escapeICS(str: string): string {
+  return str.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+export const getCalendarICS = onRequest({ cors: true }, async (req, res) => {
+  const workspaceId = req.query.workspaceId as string;
+  if (!workspaceId) {
+    res.status(400).send("workspaceId is required");
+    return;
+  }
+
+  try {
+    const snap = await db
+      .collection(`workspaces/${workspaceId}/calendar_events`)
+      .where("isPublic", "==", true)
+      .get();
+
+    const wsSnap = await db.doc(`workspaces/${workspaceId}`).get();
+    const calendarName = wsSnap.exists
+      ? (wsSnap.data()?.name as string) + " Calendar"
+      : "Calendar";
+
+    const lines: string[] = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//FlowTask//Calendar//EN",
+      "CALSCALE:GREGORIAN",
+      `X-WR-CALNAME:${escapeICS(calendarName)}`,
+    ];
+
+    for (const doc of snap.docs) {
+      const event = doc.data();
+      const start = (event.startDate as Timestamp).toDate();
+      const end = (event.endDate as Timestamp).toDate();
+      const allDay = event.allDay as boolean;
+      const dtPrefix = allDay ? "VALUE=DATE:" : "";
+
+      lines.push("BEGIN:VEVENT");
+      lines.push(`UID:${doc.id}@flowtask`);
+      lines.push(`DTSTART;${dtPrefix}${formatICSDate(start, allDay)}`);
+      lines.push(`DTEND;${dtPrefix}${formatICSDate(end, allDay)}`);
+      lines.push(`SUMMARY:${escapeICS(event.title as string)}`);
+
+      if (event.description) {
+        lines.push(`DESCRIPTION:${escapeICS(event.description as string)}`);
+      }
+      if (event.location) {
+        lines.push(`LOCATION:${escapeICS(event.location as string)}`);
+      }
+      lines.push(`CATEGORIES:${(event.category as string).toUpperCase()}`);
+
+      if (event.isOptional) {
+        lines.push("TRANSP:TRANSPARENT");
+      } else {
+        lines.push("TRANSP:OPAQUE");
+      }
+
+      if (event.isRepeating && event.repeatingType) {
+        const freqMap: Record<string, string> = {
+          daily: "DAILY",
+          weekly: "WEEKLY",
+          monthly: "MONTHLY",
+        };
+        let rrule = `RRULE:FREQ=${freqMap[event.repeatingType as string] ?? "WEEKLY"}`;
+        if (event.repeatingEndDate) {
+          const until = (event.repeatingEndDate as Timestamp).toDate();
+          rrule += `;UNTIL=${formatICSDate(until, false)}`;
+        }
+        lines.push(rrule);
+
+        if (event.excludedDates && (event.excludedDates as Timestamp[]).length > 0) {
+          const exdates = (event.excludedDates as Timestamp[])
+            .map((d) => formatICSDate(d.toDate(), allDay))
+            .join(",");
+          lines.push(`EXDATE${allDay ? ";VALUE=DATE" : ""}:${exdates}`);
+        }
+      }
+
+      lines.push("END:VEVENT");
+    }
+
+    lines.push("END:VCALENDAR");
+
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${calendarName.replace(/\s+/g, "_")}.ics"`);
+    res.status(200).send(lines.join("\r\n"));
+  } catch (err) {
+    console.error("getCalendarICS error:", err);
+    res.status(500).send("Internal server error");
+  }
 });

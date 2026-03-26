@@ -23,7 +23,7 @@ import type { CalendarEvent, EventCategory } from "@/lib/types";
 import { EVENT_CATEGORY_LABELS, EVENT_CATEGORY_COLORS } from "@/lib/types";
 import { getPublicCalendarEvents } from "@/lib/firestore";
 import PublicLayout from "@/components/calendar/PublicLayout";
-import CalendarGrid from "@/components/calendar/CalendarGrid";
+import FullCalendarView from "@/components/calendar/FullCalendarView";
 import EventCategoryBadge from "@/components/calendar/EventCategoryBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -386,18 +386,18 @@ export default function PublicCalendarPage() {
                 </div>
               </div>
 
-              <CalendarGrid
+              <FullCalendarView
                 events={events}
-                currentMonth={currentMonth}
-                selectedDate={selectedDate}
-                onDayClick={(date) => {
+                viewMode="month"
+                currentDate={currentMonth}
+                onDateClick={(date) => {
                   if (selectedDate && isSameDay(date, selectedDate)) {
                     setSelectedDate(null);
                   } else {
                     setSelectedDate(date);
                   }
                 }}
-                variant="compact"
+                readOnly
               />
             </CardContent>
           </Card>

@@ -391,6 +391,11 @@ export type CalendarEvent = {
   color: string;
   isRepeating: boolean;
   repeatingType: RepeatingType | null;
+  repeatingEndDate: Timestamp | null;
+  excludedDates: Timestamp[];
+  rsvpEnabled: boolean;
+  rsvpDeadline: Timestamp | null;
+  isOptional: boolean;
   isPublic: boolean;
   registrationOpen: boolean;
   maxRegistrations: number | null;
@@ -399,6 +404,15 @@ export type CalendarEvent = {
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+};
+
+export type RSVPStatus = "accepted" | "declined" | "tentative";
+
+export type EventRSVP = {
+  id: string;
+  userId: string;
+  status: RSVPStatus;
+  respondedAt: Timestamp;
 };
 
 export type EventRegistration = {
