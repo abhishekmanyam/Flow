@@ -71,8 +71,23 @@ service cloud.firestore {
       match /calendar_events/{eventId} {
         allow read: if isWorkspaceMember(wsId)
                     || resource.data.isPublic == true;
-        allow create, update, delete: if isWorkspaceMember(wsId)
-                                      && getRole(wsId) in ['admin', 'manager'];
+        allow create: if isWorkspaceMember(wsId) && (
+                        getRole(wsId) in ['admin', 'manager']
+                        || (
+                          getRole(wsId) == 'member'
+                          && request.resource.data.createdBy == request.auth.uid
+                        )
+                      );
+        allow update: if isWorkspaceMember(wsId) && (
+                        getRole(wsId) in ['admin', 'manager']
+                        || (
+                          getRole(wsId) == 'member'
+                          && resource.data.createdBy == request.auth.uid
+                          && request.resource.data.createdBy == resource.data.createdBy
+                        )
+                      );
+        allow delete: if isWorkspaceMember(wsId)
+                      && getRole(wsId) in ['admin', 'manager'];
 
         // Registrations (public create, admin/manager read, immutable)
         match /registrations/{regId} {

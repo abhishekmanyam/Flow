@@ -203,8 +203,14 @@ export default function CalendarPage() {
     null
   );
 
-  const canEdit = role === "admin" || role === "manager" || role === "member";
+  const canCreate = role === "admin" || role === "manager" || role === "member";
+  const canManageAnyEvent = role === "admin" || role === "manager";
   const canDelete = role === "admin" || role === "manager";
+  const canViewRegistrations = role === "admin" || role === "manager";
+  const canEditSelectedEvent = !!selectedEvent && (
+    canManageAnyEvent ||
+    (role === "member" && selectedEvent.createdBy === user?.uid)
+  );
 
   // ── Data subscription ──
   useEffect(() => {
@@ -501,7 +507,7 @@ export default function CalendarPage() {
           <Button variant="outline" size="sm" onClick={goToToday}>
             Today
           </Button>
-          {canEdit && (
+          {canCreate && (
             <Button
               size="sm"
               onClick={() => {
@@ -808,7 +814,7 @@ export default function CalendarPage() {
               <p className="text-sm text-muted-foreground">
                 No events on this day
               </p>
-              {canEdit && (
+              {canCreate && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1069,8 +1075,9 @@ export default function CalendarPage() {
           workspaceName={workspace?.name ?? ""}
           userId={user?.uid ?? ""}
           event={selectedEvent}
-          canEdit={canEdit}
+          canEdit={canEditSelectedEvent}
           canDelete={canDelete}
+          canViewRegistrations={canViewRegistrations}
         />
       )}
     </MotionPage>

@@ -54,6 +54,7 @@ interface EventDetailSheetProps {
   event: CalendarEvent;
   canEdit: boolean;
   canDelete: boolean;
+  canViewRegistrations: boolean;
 }
 
 function toDate(val: unknown): Date {
@@ -76,6 +77,7 @@ export default function EventDetailSheet({
   event,
   canEdit,
   canDelete,
+  canViewRegistrations,
 }: EventDetailSheetProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -96,7 +98,7 @@ export default function EventDetailSheet({
     }
   };
 
-  const showRegistrationsTab = event.isPublic && canEdit;
+  const showRegistrationsTab = event.isPublic && canViewRegistrations;
 
   return (
     <>
