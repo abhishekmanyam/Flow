@@ -289,3 +289,47 @@
     border-bottom: 1px solid var(--border);
   }
 }
+
+/* ── Mobile responsive sizing for FullCalendar ── */
+@media (max-width: 640px) {
+  .fc-responsive .fc-col-header-cell-cushion {
+    font-size: 0.625rem !important;
+    padding: 0.25rem 0 !important;
+  }
+  .fc-responsive .fc-daygrid-day-number {
+    font-size: 0.7rem !important;
+    padding: 0.25rem 0.35rem !important;
+  }
+  .fc-responsive .fc-day-today .fc-daygrid-day-number {
+    width: 1.35rem !important;
+    height: 1.35rem !important;
+  }
+  .fc-responsive .fc-daygrid-event,
+  .fc-responsive .fc-timegrid-event .fc-event-main {
+    font-size: 0.625rem !important;
+  }
+  .fc-responsive .fc-timegrid-event .fc-event-time {
+    font-size: 0.55rem !important;
+  }
+  .fc-responsive .fc-timegrid-slot-label-cushion {
+    font-size: 0.6rem !important;
+    padding-right: 0.4rem !important;
+  }
+  .fc-responsive .fc-timegrid-axis-cushion {
+    font-size: 0.6rem !important;
+  }
+  .fc-responsive .fc-daygrid-more-link {
+    font-size: 0.6rem !important;
+  }
+  .fc-responsive .fc-multimonth-title {
+    font-size: 0.75rem !important;
+    padding: 0.5rem 0.25rem 0.25rem !important;
+  }
+  .fc-responsive .fc-multimonth-daygrid {
+    font-size: 0.6rem !important;
+  }
+  /* Multi-month: stack to a single column on phones */
+  .fc-responsive .fc-multimonth {
+    column-count: 1 !important;
+  }
+}

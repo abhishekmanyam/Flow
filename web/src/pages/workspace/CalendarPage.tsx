@@ -462,11 +462,11 @@ export default function CalendarPage() {
   );
 
   return (
-    <MotionPage className="p-4 space-y-3">
+    <MotionPage className="p-3 sm:p-4 space-y-3">
       {/* ── Header row ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1 shrink-0">
             <Button
               variant="outline"
               size="icon"
@@ -485,12 +485,12 @@ export default function CalendarPage() {
             </Button>
           </div>
 
-          <h2 className="text-lg font-semibold tracking-tight">
+          <h2 className="text-base sm:text-lg font-semibold tracking-tight truncate">
             {headerLabel}
           </h2>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button variant="outline" size="sm" onClick={goToToday}>
             Today
           </Button>
@@ -504,15 +504,15 @@ export default function CalendarPage() {
                 setCreateDialogOpen(true);
               }}
             >
-              <Plus className="mr-1.5 h-4 w-4" />
-              Event
+              <Plus className="sm:mr-1.5 h-4 w-4" />
+              <span className="hidden sm:inline">Event</span>
             </Button>
           )}
         </div>
       </div>
 
       {/* ── Toolbar row ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1 rounded-lg border p-1">
           {VIEW_LABELS.map(({ key, label }) =>
             key === "days" ? (

@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { format } from "date-fns";
+import {
+  format,
+  isSameDay,
+  isSameMonth,
+  isSameYear,
+  differenceInCalendarDays,
+  startOfDay,
+} from "date-fns";
 import {
   CalendarDays,
   MapPin,
@@ -152,49 +159,75 @@ export default function PublicEventPage() {
 
           {/* Info rows */}
           <div className="grid gap-3 mt-5">
-            {/* Date */}
-            <div className="flex items-start gap-3">
-              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                <CalendarDays className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">
-                  {format(start, "EEEE, MMMM d, yyyy")}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {event.allDay
-                    ? "All day"
-                    : `${format(start, "h:mm a")} – ${format(end, "h:mm a")}`}
-                </p>
-              </div>
-            </div>
+            {/* When */}
+            {(() => {
+              const multi = !isSameDay(start, end);
+              const days = differenceInCalendarDays(end, start) + 1;
+              const diffFromToday = differenceInCalendarDays(
+                startOfDay(start),
+                startOfDay(new Date())
+              );
 
-            {/* Duration */}
-            {!event.allDay && (
-              <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                  <Clock className="h-5 w-5 text-muted-foreground" />
+              let dateLabel: string;
+              if (!multi) {
+                dateLabel = format(start, "EEEE, MMMM d, yyyy");
+              } else if (isSameMonth(start, end)) {
+                dateLabel = `${format(start, "EEE")} – ${format(end, "EEE")}, ${format(start, "MMM d")} – ${format(end, "d")}, ${format(start, "yyyy")}`;
+              } else if (isSameYear(start, end)) {
+                dateLabel = `${format(start, "MMM d")} – ${format(end, "MMM d")}, ${format(start, "yyyy")}`;
+              } else {
+                dateLabel = `${format(start, "MMM d, yyyy")} – ${format(end, "MMM d, yyyy")}`;
+              }
+
+              let timeLabel: string;
+              if (event.allDay) {
+                timeLabel = multi ? `All day · ${days} days` : "All day";
+              } else if (multi) {
+                timeLabel = `${format(start, "h:mm a")} – ${format(end, "h:mm a")} daily · ${days} days`;
+              } else {
+                const diffMs = end.getTime() - start.getTime();
+                const hours = Math.floor(diffMs / 3_600_000);
+                const mins = Math.floor((diffMs % 3_600_000) / 60_000);
+                const dur =
+                  hours > 0 && mins > 0
+                    ? `${hours}h ${mins}m`
+                    : hours > 0
+                      ? `${hours}h`
+                      : `${mins}m`;
+                timeLabel = `${format(start, "h:mm a")} – ${format(end, "h:mm a")} · ${dur}`;
+              }
+
+              let relLabel = "";
+              if (diffFromToday === 0) relLabel = "Today";
+              else if (diffFromToday === 1) relLabel = "Tomorrow";
+              else if (diffFromToday > 1 && diffFromToday <= 7)
+                relLabel = `In ${diffFromToday} days`;
+              else if (diffFromToday > 7 && diffFromToday <= 14)
+                relLabel = "Next week";
+              else if (diffFromToday < 0) relLabel = "Past event";
+
+              return (
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                    <CalendarDays className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium">{dateLabel}</p>
+                      {relLabel && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                          {relLabel}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" />
+                      {timeLabel}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium">
-                    {format(start, "h:mm a")} – {format(end, "h:mm a")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {(() => {
-                      const diff = end.getTime() - start.getTime();
-                      const hours = Math.floor(diff / (1000 * 60 * 60));
-                      const mins = Math.floor(
-                        (diff % (1000 * 60 * 60)) / (1000 * 60)
-                      );
-                      if (hours > 0 && mins > 0)
-                        return `${hours}h ${mins}m duration`;
-                      if (hours > 0) return `${hours}h duration`;
-                      return `${mins}m duration`;
-                    })()}
-                  </p>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Location */}
             {event.location && (

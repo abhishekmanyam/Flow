@@ -29,16 +29,26 @@ function toDate(val: unknown): Date {
 }
 
 function toFullCalendarEvents(events: CalendarEvent[]): EventInput[] {
-  return events.map((event) => ({
-    id: event.id,
-    title: event.title,
-    start: toDate(event.startDate),
-    end: toDate(event.endDate),
-    allDay: event.allDay,
-    backgroundColor: event.color,
-    borderColor: event.color,
-    extendedProps: { calendarEvent: event },
-  }));
+  return events.map((event) => {
+    const start = toDate(event.startDate);
+    let end = toDate(event.endDate);
+    // FullCalendar treats `end` as exclusive for all-day events.
+    // Bump to the start of the day AFTER the stored end so the event
+    // visibly spans through its final day.
+    if (event.allDay) {
+      end = new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1);
+    }
+    return {
+      id: event.id,
+      title: event.title,
+      start,
+      end,
+      allDay: event.allDay,
+      backgroundColor: event.color,
+      borderColor: event.color,
+      extendedProps: { calendarEvent: event },
+    };
+  });
 }
 
 interface FullCalendarViewProps {
@@ -176,7 +186,7 @@ export default function FullCalendarView({
 
   return (
     <div
-      className="fc-theme-custom rounded-lg border overflow-hidden"
+      className="fc-theme-custom fc-responsive rounded-lg border overflow-x-auto"
       style={
         {
           "--fc-border-color": "hsl(var(--border))",
