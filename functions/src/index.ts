@@ -117,7 +117,7 @@ function escapeICS(str: string): string {
   return str.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 }
 
-export const getCalendarICS = onRequest({ cors: true }, async (req, res) => {
+export const getCalendarICS = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   const workspaceId = req.query.workspaceId as string;
   if (!workspaceId) {
     res.status(400).send("workspaceId is required");
@@ -148,12 +148,16 @@ export const getCalendarICS = onRequest({ cors: true }, async (req, res) => {
       const start = (event.startDate as Timestamp).toDate();
       const end = (event.endDate as Timestamp).toDate();
       const allDay = event.allDay as boolean;
-      const dtPrefix = allDay ? "VALUE=DATE:" : "";
 
       lines.push("BEGIN:VEVENT");
       lines.push(`UID:${doc.id}@flowtask`);
-      lines.push(`DTSTART;${dtPrefix}${formatICSDate(start, allDay)}`);
-      lines.push(`DTEND;${dtPrefix}${formatICSDate(end, allDay)}`);
+      if (allDay) {
+        lines.push(`DTSTART;VALUE=DATE:${formatICSDate(start, true)}`);
+        lines.push(`DTEND;VALUE=DATE:${formatICSDate(end, true)}`);
+      } else {
+        lines.push(`DTSTART:${formatICSDate(start, false)}`);
+        lines.push(`DTEND:${formatICSDate(end, false)}`);
+      }
       lines.push(`SUMMARY:${escapeICS(event.title as string)}`);
 
       if (event.description) {

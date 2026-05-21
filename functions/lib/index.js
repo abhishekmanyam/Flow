@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.autoClockOut = exports.checkTimesheetAccess = void 0;
+exports.getCalendarICS = exports.autoClockOut = exports.checkTimesheetAccess = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const app_1 = require("firebase-admin/app");
@@ -79,5 +79,100 @@ exports.autoClockOut = (0, scheduler_1.onSchedule)("every 30 minutes", async () 
     }
     await batch.commit();
     console.log(`autoClockOut: committed ${staleSnap.size} updates`);
+});
+// ─── ICS Calendar Feed ────────────────────────────────────────────────────────
+function formatICSDate(date, allDay) {
+    if (allDay) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        return `${y}${m}${d}`;
+    }
+    return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+function escapeICS(str) {
+    return str.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+exports.getCalendarICS = (0, https_1.onRequest)({ cors: true, invoker: "public" }, async (req, res) => {
+    const workspaceId = req.query.workspaceId;
+    if (!workspaceId) {
+        res.status(400).send("workspaceId is required");
+        return;
+    }
+    try {
+        const snap = await db
+            .collection(`workspaces/${workspaceId}/calendar_events`)
+            .where("isPublic", "==", true)
+            .get();
+        const wsSnap = await db.doc(`workspaces/${workspaceId}`).get();
+        const calendarName = wsSnap.exists
+            ? wsSnap.data()?.name + " Calendar"
+            : "Calendar";
+        const lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//FlowTask//Calendar//EN",
+            "CALSCALE:GREGORIAN",
+            `X-WR-CALNAME:${escapeICS(calendarName)}`,
+        ];
+        for (const doc of snap.docs) {
+            const event = doc.data();
+            const start = event.startDate.toDate();
+            const end = event.endDate.toDate();
+            const allDay = event.allDay;
+            lines.push("BEGIN:VEVENT");
+            lines.push(`UID:${doc.id}@flowtask`);
+            if (allDay) {
+                lines.push(`DTSTART;VALUE=DATE:${formatICSDate(start, true)}`);
+                lines.push(`DTEND;VALUE=DATE:${formatICSDate(end, true)}`);
+            }
+            else {
+                lines.push(`DTSTART:${formatICSDate(start, false)}`);
+                lines.push(`DTEND:${formatICSDate(end, false)}`);
+            }
+            lines.push(`SUMMARY:${escapeICS(event.title)}`);
+            if (event.description) {
+                lines.push(`DESCRIPTION:${escapeICS(event.description)}`);
+            }
+            if (event.location) {
+                lines.push(`LOCATION:${escapeICS(event.location)}`);
+            }
+            lines.push(`CATEGORIES:${event.category.toUpperCase()}`);
+            if (event.isOptional) {
+                lines.push("TRANSP:TRANSPARENT");
+            }
+            else {
+                lines.push("TRANSP:OPAQUE");
+            }
+            if (event.isRepeating && event.repeatingType) {
+                const freqMap = {
+                    daily: "DAILY",
+                    weekly: "WEEKLY",
+                    monthly: "MONTHLY",
+                };
+                let rrule = `RRULE:FREQ=${freqMap[event.repeatingType] ?? "WEEKLY"}`;
+                if (event.repeatingEndDate) {
+                    const until = event.repeatingEndDate.toDate();
+                    rrule += `;UNTIL=${formatICSDate(until, false)}`;
+                }
+                lines.push(rrule);
+                if (event.excludedDates && event.excludedDates.length > 0) {
+                    const exdates = event.excludedDates
+                        .map((d) => formatICSDate(d.toDate(), allDay))
+                        .join(",");
+                    lines.push(`EXDATE${allDay ? ";VALUE=DATE" : ""}:${exdates}`);
+                }
+            }
+            lines.push("END:VEVENT");
+        }
+        lines.push("END:VCALENDAR");
+        res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${calendarName.replace(/\s+/g, "_")}.ics"`);
+        res.status(200).send(lines.join("\r\n"));
+    }
+    catch (err) {
+        console.error("getCalendarICS error:", err);
+        res.status(500).send("Internal server error");
+    }
 });
 //# sourceMappingURL=index.js.map

@@ -123,3 +123,169 @@
     @apply bg-background text-foreground;
     }
 }
+
+/* ── FullCalendar theme overrides (scoped to .fc-theme-custom) ── */
+.fc-theme-custom {
+  /* Font */
+  --fc-small-font-size: 0.75rem;
+
+  /* Use solid borders instead of dotted */
+  & .fc-timegrid-slot {
+    border-bottom-style: solid !important;
+  }
+  & .fc-timegrid-slot-minor {
+    border-bottom-style: solid !important;
+    border-bottom-color: transparent !important;
+  }
+
+  /* Slot label styling */
+  & .fc-timegrid-slot-label-cushion {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    padding-right: 0.75rem;
+  }
+
+  /* Day header styling */
+  & .fc-col-header-cell-cushion {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    padding: 0.5rem 0;
+  }
+  & .fc-col-header-cell {
+    border-bottom: 1px solid var(--border) !important;
+    background: transparent;
+  }
+
+  /* Month grid cell borders */
+  & .fc-daygrid-day {
+    border: 1px solid var(--border) !important;
+  }
+
+  /* Day number in month grid */
+  & .fc-daygrid-day-number {
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.375rem 0.5rem;
+    color: var(--foreground);
+  }
+
+  /* Today highlight */
+  & .fc-day-today {
+    background-color: var(--accent) !important;
+  }
+  & .fc-day-today .fc-daygrid-day-number {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-radius: 9999px;
+    width: 1.625rem;
+    height: 1.625rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+  }
+
+  /* Time grid events: rounded, spacing, shadow */
+  & .fc-timegrid-event {
+    border-radius: 0.375rem !important;
+    border: none !important;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    margin: 0 2px;
+  }
+  & .fc-timegrid-event .fc-event-main {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  & .fc-timegrid-event .fc-event-time {
+    font-size: 0.65rem;
+    opacity: 0.85;
+    font-weight: 400;
+  }
+
+  /* Day grid events: rounded pills */
+  & .fc-daygrid-event {
+    border-radius: 0.25rem !important;
+    border: none !important;
+    margin: 1px 2px;
+    font-size: 0.7rem;
+  }
+  & .fc-daygrid-dot-event {
+    padding: 2px 4px;
+  }
+
+  /* +N more link */
+  & .fc-daygrid-more-link {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--primary);
+    padding: 2px 4px;
+  }
+
+  /* Now indicator */
+  & .fc-timegrid-now-indicator-line {
+    border-color: var(--primary) !important;
+    border-width: 2px;
+  }
+  & .fc-timegrid-now-indicator-arrow {
+    border-color: var(--primary) !important;
+  }
+
+  /* Multi-month (year) view */
+  & .fc-multimonth-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.75rem 0.5rem 0.375rem;
+  }
+  & .fc-multimonth-daygrid {
+    font-size: 0.7rem;
+  }
+  & .fc-multimonth-header .fc-col-header-cell-cushion {
+    font-size: 0.65rem;
+    padding: 0.25rem 0;
+  }
+  & .fc-multimonth {
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  /* Remove FullCalendar's default event background since we render custom content */
+  & .fc-daygrid-event-harness {
+    margin-top: 1px;
+  }
+
+  /* Scrollbar styling */
+  & .fc-scroller::-webkit-scrollbar {
+    width: 6px;
+  }
+  & .fc-scroller::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  & .fc-scroller::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+
+  /* Cursor on hoverable elements */
+  & .fc-daygrid-day:hover {
+    background-color: var(--accent);
+    cursor: pointer;
+  }
+  & .fc-event {
+    cursor: pointer !important;
+  }
+
+  /* All-day section */
+  & .fc-timegrid-divider {
+    display: none;
+  }
+  & .fc-daygrid-body {
+    border-bottom: 1px solid var(--border);
+  }
+}

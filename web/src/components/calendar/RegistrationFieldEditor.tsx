@@ -73,23 +73,23 @@ export default function RegistrationFieldEditor({
             Required
           </label>
         </div>
-        <Button variant="ghost" size="icon" onClick={onDelete}>
+        <Button type="button" variant="ghost" size="icon" onClick={onDelete}>
           <Trash2 className="h-4 w-4 text-muted-foreground" />
         </Button>
       </div>
       {field.type === "select" && (
         <Input
-          value={field.options?.join(", ") ?? ""}
+          value={field.options?.join("; ") ?? ""}
           onChange={(e) =>
             onChange({
               ...field,
               options: e.target.value
-                .split(",")
+                .split(";")
                 .map((s) => s.trim())
                 .filter(Boolean),
             })
           }
-          placeholder="Option 1, Option 2, ..."
+          placeholder="Option 1; Option 2; Option 3"
           className="ml-0"
         />
       )}

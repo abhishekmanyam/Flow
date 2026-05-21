@@ -49,12 +49,15 @@ export function generateICS(
   for (const event of events) {
     const start = toDate(event.startDate);
     const end = toDate(event.endDate);
-    const dtPrefix = event.allDay ? "VALUE=DATE:" : "";
-
     lines.push("BEGIN:VEVENT");
     lines.push(`UID:${event.id}@flowtask`);
-    lines.push(`DTSTART;${dtPrefix}${formatICSDate(start, event.allDay)}`);
-    lines.push(`DTEND;${dtPrefix}${formatICSDate(end, event.allDay)}`);
+    if (event.allDay) {
+      lines.push(`DTSTART;VALUE=DATE:${formatICSDate(start, true)}`);
+      lines.push(`DTEND;VALUE=DATE:${formatICSDate(end, true)}`);
+    } else {
+      lines.push(`DTSTART:${formatICSDate(start, false)}`);
+      lines.push(`DTEND:${formatICSDate(end, false)}`);
+    }
     lines.push(`SUMMARY:${escapeICS(event.title)}`);
 
     if (event.description) {

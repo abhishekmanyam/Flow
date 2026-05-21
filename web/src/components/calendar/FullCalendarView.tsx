@@ -125,26 +125,44 @@ export default function FullCalendarView({
       const event = arg.event;
       const isTimeGrid = arg.view.type.startsWith("timeGrid");
 
+      // Year view: compact dot + title
       if (arg.view.type === "multiMonthYear") {
         return (
-          <div className="flex items-center gap-1 px-0.5">
+          <div className="flex items-center gap-1 px-0.5 py-px overflow-hidden">
             <span
               className="h-1.5 w-1.5 rounded-full shrink-0"
               style={{ backgroundColor: event.backgroundColor ?? undefined }}
             />
-            <span className="text-[10px] truncate">{event.title}</span>
+            <span className="text-[10px] truncate text-foreground">{event.title}</span>
           </div>
         );
       }
 
+      // Time grid (day / week): title + time stacked
+      if (isTimeGrid) {
+        return (
+          <div className="flex flex-col gap-0 px-1 py-0.5 overflow-hidden h-full">
+            <span className="font-medium text-[11px] truncate text-white leading-tight">
+              {event.title}
+            </span>
+            {arg.timeText && (
+              <span className="text-[10px] text-white/75 leading-tight">
+                {arg.timeText}
+              </span>
+            )}
+          </div>
+        );
+      }
+
+      // Day grid (month): horizontal pill
       return (
         <div
-          className={`flex items-center gap-1 px-1.5 ${isTimeGrid ? "py-0.5" : "py-0.5"} rounded text-white text-[11px] leading-tight overflow-hidden cursor-pointer`}
+          className="flex items-center gap-1.5 px-1.5 py-0.5 rounded text-white text-[11px] leading-tight overflow-hidden cursor-pointer"
           style={{ backgroundColor: event.backgroundColor ?? undefined }}
         >
           <span className="font-medium truncate">{event.title}</span>
-          {!event.allDay && !isTimeGrid && arg.timeText && (
-            <span className="opacity-80 text-[10px] shrink-0">
+          {!event.allDay && arg.timeText && (
+            <span className="opacity-75 text-[10px] shrink-0 tabular-nums">
               {arg.timeText}
             </span>
           )}
@@ -201,6 +219,7 @@ export default function FullCalendarView({
         }}
         height="auto"
         dayMaxEvents={3}
+        dayMaxEventRows={2}
         eventContent={renderEventContent}
         eventClick={handleEventClick}
         dateClick={readOnly ? undefined : handleDateClick}
@@ -208,7 +227,11 @@ export default function FullCalendarView({
         editable={false}
         selectable={!readOnly}
         nowIndicator
-        multiMonthMaxColumns={4}
+        multiMonthMaxColumns={3}
+        slotMinTime="06:00:00"
+        allDaySlot
+        allDayText=""
+        expandRows
       />
     </div>
   );

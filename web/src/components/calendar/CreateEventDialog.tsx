@@ -185,7 +185,10 @@ export default function CreateEventDialog({
           : Number(values.maxRegistrations);
 
       if (isEditing && event) {
-        await updateCalendarEvent(wsId, event.id, {
+        const baseEventId = event.id.includes("_")
+          ? event.id.substring(0, event.id.lastIndexOf("_"))
+          : event.id;
+        await updateCalendarEvent(wsId, baseEventId, {
           title: values.title,
           description: values.description ?? "",
           startDate: startTimestamp,
@@ -246,7 +249,8 @@ export default function CreateEventDialog({
         toast.success("Event created");
       }
       onOpenChange(false);
-    } catch {
+    } catch (err) {
+      console.error("Event save error:", err);
       toast.error(
         isEditing ? "Failed to update event" : "Failed to create event"
       );

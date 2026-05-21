@@ -905,29 +905,58 @@ export default function CalendarPage() {
                 <Label className="text-xs text-muted-foreground">
                   Subscribe URL (for Google Calendar / Outlook)
                 </Label>
-                <div className="flex gap-2">
-                  <Input
-                    readOnly
-                    value={`${window.location.origin}/api/calendar/${workspace?.id ?? ""}/events.ics`}
-                    className="text-xs"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0"
-                    onClick={() => {
-                      navigator.clipboard.writeText(
-                        `${window.location.origin}/api/calendar/${workspace?.id ?? ""}/events.ics`
-                      );
-                      toast.success("Link copied");
-                    }}
-                  >
-                    <Link2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Paste this URL in Google Calendar (Other calendars → From URL) or Outlook (Add calendar → Subscribe from web)
-                </p>
+                {(() => {
+                  const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string ?? "";
+                  const projectId = authDomain.replace(".firebaseapp.com", "") || import.meta.env.VITE_FIREBASE_PROJECT_ID;
+                  const icsUrl = projectId
+                    ? `https://us-central1-${projectId}.cloudfunctions.net/getCalendarICS?workspaceId=${workspace?.id ?? ""}`
+                    : "";
+                  const webcalUrl = icsUrl.replace(/^https?:\/\//, "webcal://");
+                  const googleSubUrl = icsUrl
+                    ? `https://www.google.com/calendar/render?cid=${encodeURIComponent(webcalUrl)}`
+                    : "";
+                  return (
+                    <>
+                      {icsUrl && (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            className="flex-1 gap-2 text-xs"
+                            onClick={() => window.open(googleSubUrl, "_blank")}
+                          >
+                            <CalendarDays className="h-4 w-4" />
+                            Add to Google Calendar
+                          </Button>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Input
+                          readOnly
+                          value={icsUrl}
+                          className="text-xs"
+                          placeholder="Deploy Cloud Function first"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          disabled={!icsUrl}
+                          onClick={() => {
+                            navigator.clipboard.writeText(icsUrl);
+                            toast.success("Link copied");
+                          }}
+                        >
+                          <Link2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        {icsUrl
+                          ? "Or paste the URL above in Outlook (Add calendar → Subscribe from web)."
+                          : "Set VITE_FIREBASE_PROJECT_ID and deploy the Cloud Function first."}
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>
