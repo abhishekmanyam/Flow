@@ -1,53 +1,91 @@
 import { useEffect, useState } from "react";
+import { Mail, Trash2 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
-import { subscribeToMembers, createInvite, getPendingInvites, deleteInvite, updateMemberRole, removeWorkspaceMember } from "@/lib/firestore";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MotionPage } from "@/components/ui/motion-page";
-import { StaggerContainer, StaggerItem } from "@/components/ui/stagger";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { toast } from "sonner";
-import { Loader2, Plus, Mail, Copy, Trash2 } from "lucide-react";
+  subscribeToMembers,
+  createInvite,
+  getPendingInvites,
+  deleteInvite,
+  updateMemberRole,
+  removeWorkspaceMember,
+} from "@/lib/firestore";
+import { toast } from "@/components/system/toast";
 import type { WorkspaceMember, Role, Invite } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
 import { sendInviteEmail } from "@/lib/email";
+import { Layout, LayoutHeader, LayoutContent } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Token } from "@astryxdesign/core/Token";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Table, proportional, pixel } from "@astryxdesign/core/Table";
+import type { TableColumn } from "@astryxdesign/core/Table";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { LayoutFooter } from "@astryxdesign/core/Layout";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 
-function getInitials(name: string | null | undefined) {
-  if (!name) return "?";
-  return name.split(/\s/).map((s) => s[0]?.toUpperCase()).slice(0, 2).join("");
-}
+interface MemberRow extends WorkspaceMember, Record<string, unknown> {}
+interface InviteRow extends Invite, Record<string, unknown> {}
+
+const ROLE_TOKEN_COLOR: Record<Role, "purple" | "blue" | "gray" | "teal"> = {
+  admin: "purple",
+  manager: "blue",
+  member: "gray",
+  hr: "teal",
+  viewer: "gray",
+};
+
+const ROLE_OPTIONS = [
+  { value: "admin", label: "Admin" },
+  { value: "manager", label: "Manager" },
+  { value: "member", label: "Member" },
+  { value: "hr", label: "HR" },
+  { value: "viewer", label: "Viewer" },
+];
+
+const INVITE_ROLE_OPTIONS = [
+  { value: "admin", label: "Admin — full access" },
+  { value: "manager", label: "Manager — create & manage projects" },
+  { value: "member", label: "Member — edit tasks" },
+  { value: "hr", label: "HR — view attendance & read-only projects" },
+  { value: "viewer", label: "Viewer — read only" },
+];
 
 export default function MembersPage() {
   const { workspace, role, user } = useAuthStore();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [membersLoaded, setMembersLoaded] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("member");
   const [loading, setLoading] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<WorkspaceMember | null>(null);
   const [pendingInvites, setPendingInvites] = useState<Invite[]>([]);
+  const [invitesLoaded, setInvitesLoaded] = useState(false);
 
   useEffect(() => {
     if (!workspace) return;
-    if (role === "admin") getPendingInvites(workspace.id).then(setPendingInvites);
-    return subscribeToMembers(workspace.id, setMembers);
+    if (role === "admin") {
+      getPendingInvites(workspace.id)
+        .then(setPendingInvites)
+        .finally(() => setInvitesLoaded(true));
+    }
+    setMembersLoaded(false);
+    return subscribeToMembers(workspace.id, (m) => {
+      setMembers(m);
+      setMembersLoaded(true);
+    });
   }, [workspace?.id, role]);
 
   if (!workspace || !user) return null;
@@ -93,11 +131,14 @@ export default function MembersPage() {
     }
   };
 
-  const handleRemoveMember = async (m: WorkspaceMember) => {
+  const handleRemoveMember = async () => {
+    if (!memberToRemove) return;
+    const m = memberToRemove;
     setRemovingId(m.userId);
     try {
       await removeWorkspaceMember(workspace.id, m.userId);
       toast.success(`${m.profile?.name ?? "Member"} has been removed`);
+      setMemberToRemove(null);
     } catch {
       toast.error("Failed to remove member");
     } finally {
@@ -105,173 +146,236 @@ export default function MembersPage() {
     }
   };
 
+  const memberColumns: TableColumn<MemberRow>[] = [
+    {
+      key: "member",
+      header: "Member",
+      width: proportional(2),
+      renderCell: (m) => (
+        <HStack gap={3} align="center">
+          <Avatar size="small" src={m.profile?.avatarUrl ?? undefined} name={m.profile?.name} />
+          <VStack gap={0}>
+            <HStack gap={1.5} align="center">
+              <Text weight="medium">{m.profile?.name || "Unknown"}</Text>
+              {m.userId === user.uid && (
+                <Text type="supporting" color="secondary">
+                  (you)
+                </Text>
+              )}
+            </HStack>
+            <Text type="supporting" color="secondary">
+              {m.profile?.email}
+            </Text>
+          </VStack>
+        </HStack>
+      ),
+    },
+    {
+      key: "role",
+      header: "Role",
+      width: pixel(180),
+      renderCell: (m) =>
+        isAdmin && m.userId !== user.uid ? (
+          <Selector
+            label="Role"
+            isLabelHidden
+            size="sm"
+            value={m.role}
+            options={ROLE_OPTIONS}
+            onChange={async (v) => {
+              try {
+                await updateMemberRole(workspace.id, m.userId, v as Role);
+                toast.success("Role updated");
+              } catch {
+                toast.error("Failed to update role");
+              }
+            }}
+          />
+        ) : (
+          <Token label={ROLE_LABELS[m.role]} color={ROLE_TOKEN_COLOR[m.role]} />
+        ),
+    },
+    {
+      key: "actions",
+      header: "",
+      width: pixel(56),
+      align: "end",
+      renderCell: (m) =>
+        isAdmin && m.userId !== user.uid ? (
+          <IconButton
+            label="Remove member"
+            tooltip="Remove member"
+            variant="ghost"
+            size="sm"
+            icon={<Trash2 size={14} />}
+            isLoading={removingId === m.userId}
+            onClick={() => setMemberToRemove(m)}
+          />
+        ) : null,
+    },
+  ];
+
+  const inviteColumns: TableColumn<InviteRow>[] = [
+    {
+      key: "invite",
+      header: "Invite",
+      width: proportional(2),
+      renderCell: (inv) => (
+        <HStack gap={3} align="center">
+          <Mail size={16} />
+          <VStack gap={0}>
+            <Text weight="medium">{inv.email}</Text>
+            <Text type="supporting" color="secondary" maxLines={1}>
+              {window.location.origin}/invite/{inv.token}
+            </Text>
+          </VStack>
+        </HStack>
+      ),
+    },
+    {
+      key: "role",
+      header: "Role",
+      width: pixel(140),
+      renderCell: (inv) => <Token label={ROLE_LABELS[inv.role]} color={ROLE_TOKEN_COLOR[inv.role]} />,
+    },
+    {
+      key: "actions",
+      header: "",
+      width: pixel(88),
+      align: "end",
+      renderCell: (inv) => (
+        <HStack gap={1}>
+          <IconButton
+            label="Copy invite link"
+            tooltip="Copy invite link"
+            variant="ghost"
+            size="sm"
+            icon={<Mail size={14} />}
+            onClick={() => handleCopyLink(inv)}
+          />
+          <IconButton
+            label="Delete invite"
+            tooltip="Delete invite"
+            variant="ghost"
+            size="sm"
+            icon={<Trash2 size={14} />}
+            onClick={() => handleDeleteInvite(inv)}
+          />
+        </HStack>
+      ),
+    },
+  ];
+
   return (
-    <MotionPage className="p-6 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Members</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
-        </div>
-        {isAdmin && (
-          <Button onClick={() => setInviteOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />Invite member
-          </Button>
-        )}
-      </div>
-
-      <StaggerContainer className="space-y-2">
-        {members.map((m) => (
-          <StaggerItem key={m.userId} className="flex items-center justify-between p-3 rounded-lg border">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-9 w-9">
-                <AvatarImage src={m.profile?.avatarUrl ?? undefined} />
-                <AvatarFallback>{getInitials(m.profile?.name)}</AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="text-sm font-medium">
-                  {m.profile?.name || "Unknown"}
-                  {m.userId === user.uid && <span className="ml-1.5 text-xs text-muted-foreground">(you)</span>}
-                </p>
-                <p className="text-xs text-muted-foreground">{m.profile?.email}</p>
-              </div>
-            </div>
-            {isAdmin && m.userId !== user.uid ? (
-              <div className="flex items-center gap-1.5">
-                <Select
-                  value={m.role}
-                  onValueChange={async (v) => {
-                    try {
-                      await updateMemberRole(workspace.id, m.userId, v as Role);
-                      toast.success("Role updated");
-                    } catch {
-                      toast.error("Failed to update role");
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-[140px] h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="member">Member</SelectItem>
-                    <SelectItem value="hr">HR</SelectItem>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                  </SelectContent>
-                </Select>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      disabled={removingId === m.userId}
-                    >
-                      {removingId === m.userId ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Remove member</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will remove <span className="font-medium text-foreground">{m.profile?.name ?? "this member"}</span> from
-                        the workspace and all projects. They will be unassigned from any tasks. This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleRemoveMember(m)}>
-                        Remove
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            ) : (
-              <Badge variant="secondary" className="capitalize">{m.role}</Badge>
+    <Layout
+      header={
+        <LayoutHeader hasDivider>
+          <HStack justify="between" align="center" paddingInline={4} paddingBlock={3}>
+            <VStack gap={0}>
+              <Heading level={1}>Members</Heading>
+              <Text type="supporting" color="secondary">
+                {members.length} member{members.length !== 1 ? "s" : ""}
+              </Text>
+            </VStack>
+            {isAdmin && (
+              <Button label="Invite member" variant="primary" onClick={() => setInviteOpen(true)} />
             )}
-          </StaggerItem>
-        ))}
-      </StaggerContainer>
+          </HStack>
+        </LayoutHeader>
+      }
+    >
+      <LayoutContent padding={0}>
+        {!membersLoaded ? (
+          <VStack padding={4} gap={2}>
+            <Skeleton height={48} radius={2} />
+            <Skeleton height={48} radius={2} />
+            <Skeleton height={48} radius={2} />
+          </VStack>
+        ) : (
+          <Table
+            data={members as MemberRow[]}
+            columns={memberColumns}
+            idKey="userId"
+            hasHover
+            emptyState={
+              <EmptyState
+                title="No members yet"
+                description="Invite teammates to collaborate in this workspace."
+                isCompact
+              />
+            }
+          />
+        )}
 
-      {isAdmin && pendingInvites.length > 0 && (
-        <>
-          <Separator />
-          <div className="space-y-2">
-            <h2 className="text-sm font-medium text-muted-foreground">Pending invites ({pendingInvites.length})</h2>
-            {pendingInvites.map((inv) => (
-              <div key={inv.id} className="flex items-center justify-between p-3 rounded-lg border border-dashed">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{inv.email}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {window.location.origin}/invite/{inv.token}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0 ml-3">
-                  <Badge variant="outline" className="capitalize">{inv.role}</Badge>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopyLink(inv)}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Copy invite link</TooltipContent>
-                  </Tooltip>
-                  {isAdmin && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteInvite(inv)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Delete invite</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+        {isAdmin && invitesLoaded && pendingInvites.length > 0 && (
+          <>
+            <Divider />
+            <VStack paddingInline={4} paddingBlock={3} gap={0}>
+              <Heading level={3}>Pending invites ({pendingInvites.length})</Heading>
+            </VStack>
+            <Table data={pendingInvites as InviteRow[]} columns={inviteColumns} idKey="id" hasHover />
+          </>
+        )}
+      </LayoutContent>
 
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Invite member</DialogTitle></DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Email address</Label>
-              <Input type="email" placeholder="colleague@company.com" value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)} required autoFocus />
-            </div>
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as Role)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin — full access</SelectItem>
-                  <SelectItem value="manager">Manager — create &amp; manage projects</SelectItem>
-                  <SelectItem value="member">Member — edit tasks</SelectItem>
-                  <SelectItem value="hr">HR — view attendance &amp; read-only projects</SelectItem>
-                  <SelectItem value="viewer">Viewer — read only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Send invite
-            </Button>
-          </form>
-        </DialogContent>
+      <Dialog isOpen={inviteOpen} onOpenChange={setInviteOpen} purpose="form" width={440}>
+        <Layout
+          header={
+            <DialogHeader
+              title="Invite member"
+              subtitle="Send an email invite to join this workspace."
+              onOpenChange={setInviteOpen}
+            />
+          }
+          content={
+            <LayoutContent>
+              <form id="invite-member-form" onSubmit={handleInvite}>
+                <FormLayout>
+                  <TextInput
+                    label="Email address"
+                    type="email"
+                    placeholder="colleague@company.com"
+                    value={inviteEmail}
+                    onChange={setInviteEmail}
+                    isRequired
+                    hasAutoFocus
+                  />
+                  <Selector
+                    label="Role"
+                    value={inviteRole}
+                    options={INVITE_ROLE_OPTIONS}
+                    onChange={(v) => setInviteRole(v as Role)}
+                  />
+                </FormLayout>
+              </form>
+            </LayoutContent>
+          }
+          footer={
+            <LayoutFooter>
+              <HStack gap={2} justify="end">
+                <Button label="Cancel" variant="secondary" onClick={() => setInviteOpen(false)} />
+                <Button
+                  label="Send invite"
+                  variant="primary"
+                  type="submit"
+                  form="invite-member-form"
+                  isLoading={loading}
+                />
+              </HStack>
+            </LayoutFooter>
+          }
+        />
       </Dialog>
-    </MotionPage>
+
+      <AlertDialog
+        isOpen={!!memberToRemove}
+        onOpenChange={(open) => !open && setMemberToRemove(null)}
+        title="Remove member"
+        description={`This will remove ${memberToRemove?.profile?.name ?? "this member"} from the workspace and all projects. They will be unassigned from any tasks. This action cannot be undone.`}
+        actionLabel="Remove"
+        isActionLoading={!!removingId}
+        onAction={handleRemoveMember}
+      />
+    </Layout>
   );
 }

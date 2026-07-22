@@ -1,98 +1,120 @@
+import { Trash2 } from "lucide-react";
 import type { RegistrationField, RegistrationFieldType } from "@/lib/types";
 import { REGISTRATION_FIELD_TYPE_LABELS } from "@/lib/types";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Trash2 } from "lucide-react";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Switch } from "@astryxdesign/core/Switch";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Icon } from "@astryxdesign/core/Icon";
 
 interface RegistrationFieldEditorProps {
   field: RegistrationField;
   onChange: (updated: RegistrationField) => void;
   onDelete: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  isFirst?: boolean;
+  isLast?: boolean;
 }
+
+const TYPE_OPTIONS = (
+  Object.entries(REGISTRATION_FIELD_TYPE_LABELS) as [
+    RegistrationFieldType,
+    string,
+  ][]
+).map(([value, label]) => ({ value, label }));
 
 export default function RegistrationFieldEditor({
   field,
   onChange,
   onDelete,
+  onMoveUp,
+  onMoveDown,
+  isFirst = false,
+  isLast = false,
 }: RegistrationFieldEditorProps) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Input
-          value={field.label}
-          onChange={(e) => onChange({ ...field, label: e.target.value })}
+    <VStack gap={2}>
+      <HStack gap={2} align="end">
+        <HStack gap={0.5} align="center">
+          <IconButton
+            label="Move field up"
+            size="sm"
+            variant="ghost"
+            icon={<Icon icon="arrowUp" size="sm" />}
+            isDisabled={isFirst || !onMoveUp}
+            onClick={() => onMoveUp?.()}
+          />
+          <IconButton
+            label="Move field down"
+            size="sm"
+            variant="ghost"
+            icon={<Icon icon="arrowDown" size="sm" />}
+            isDisabled={isLast || !onMoveDown}
+            onClick={() => onMoveDown?.()}
+          />
+        </HStack>
+
+        <TextInput
+          label="Field label"
+          isLabelHidden
+          size="sm"
           placeholder="Field label"
-          className="flex-1"
+          value={field.label}
+          onChange={(value) => onChange({ ...field, label: value })}
         />
-        <Select
+
+        <Selector
+          label="Field type"
+          isLabelHidden
+          size="sm"
+          options={TYPE_OPTIONS}
           value={field.type}
-          onValueChange={(v) =>
+          onChange={(value) =>
             onChange({
               ...field,
-              type: v as RegistrationFieldType,
-              options: v === "select" ? field.options ?? [] : undefined,
+              type: value as RegistrationFieldType,
+              options:
+                value === "select" ? (field.options ?? []) : undefined,
             })
           }
-        >
-          <SelectTrigger className="w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(
-              Object.entries(REGISTRATION_FIELD_TYPE_LABELS) as [
-                RegistrationFieldType,
-                string,
-              ][]
-            ).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex items-center gap-1.5">
-          <Checkbox
-            id={`required-${field.name}`}
-            checked={field.required}
-            onCheckedChange={(checked) =>
-              onChange({ ...field, required: checked === true })
-            }
-          />
-          <label
-            htmlFor={`required-${field.name}`}
-            className="text-sm text-muted-foreground whitespace-nowrap"
-          >
-            Required
-          </label>
-        </div>
-        <Button type="button" variant="ghost" size="icon" onClick={onDelete}>
-          <Trash2 className="h-4 w-4 text-muted-foreground" />
-        </Button>
-      </div>
+        />
+
+        <Switch
+          label="Required"
+          value={field.required}
+          onChange={(checked) => onChange({ ...field, required: checked })}
+        />
+
+        <IconButton
+          label="Delete field"
+          size="sm"
+          variant="ghost"
+          icon={<Trash2 size={16} />}
+          onClick={onDelete}
+        />
+      </HStack>
+
       {field.type === "select" && (
-        <Input
+        <TextInput
+          label="Dropdown options"
+          isLabelHidden
+          size="sm"
+          placeholder="Option 1; Option 2; Option 3"
           value={field.options?.join("; ") ?? ""}
-          onChange={(e) =>
+          onChange={(value) =>
             onChange({
               ...field,
-              options: e.target.value
+              options: value
                 .split(";")
                 .map((s) => s.trim())
                 .filter(Boolean),
             })
           }
-          placeholder="Option 1; Option 2; Option 3"
-          className="ml-0"
         />
       )}
-    </div>
+    </VStack>
   );
 }

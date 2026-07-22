@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { useProjectAccess } from "@/hooks/useProjectAccess";
-import { MotionPage } from "@/components/ui/motion-page";
-import { StaggerContainer, StaggerItem } from "@/components/ui/stagger";
 import {
   getWorkspaceMembers,
   subscribeToProjectMembers,
@@ -14,43 +12,35 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import ProjectHeader from "@/components/projects/ProjectHeader";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
-import { Loader2, MoreHorizontal, Plus, UserMinus, Shield, UserPlus } from "lucide-react";
+import { Layout, LayoutContent, LayoutHeader, LayoutFooter } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Token } from "@astryxdesign/core/Token";
+import { Button } from "@astryxdesign/core/Button";
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
+import { Table, proportional, pixel } from "@astryxdesign/core/Table";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { Banner } from "@astryxdesign/core/Banner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { toast } from "@/components/system/toast";
+import { Plus, Users } from "lucide-react";
 import { PROJECT_ROLE_LABELS } from "@/lib/types";
 import type { Project, ProjectMember, ProjectRole, WorkspaceMember } from "@/lib/types";
 
-function getInitials(name: string | null | undefined) {
-  if (!name) return "?";
-  return name
-    .split(/\s/)
-    .map((s) => s[0]?.toUpperCase())
-    .slice(0, 2)
-    .join("");
-}
+type MemberRow = ProjectMember & Record<string, unknown>;
+
+const ROLE_TOKEN_COLOR: Record<ProjectRole, "purple" | "gray" | "default"> = {
+  project_admin: "purple",
+  member: "default",
+  viewer: "gray",
+};
 
 export default function ProjectMembersPage() {
   const { slug, projectId } = useParams<{ slug: string; projectId: string }>();
@@ -63,7 +53,8 @@ export default function ProjectMembersPage() {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState<ProjectRole>("member");
   const [adding, setAdding] = useState(false);
-  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<ProjectMember | null>(null);
+  const [removeLoading, setRemoveLoading] = useState(false);
 
   useEffect(() => {
     if (!workspace || !projectId || accessLoading || !hasAccess) return;
@@ -78,24 +69,24 @@ export default function ProjectMembersPage() {
 
   if (accessLoading || !workspace || !project) {
     return (
-      <div className="p-6">
-        <Skeleton className="h-8 w-48" />
-      </div>
+      <Layout>
+        <LayoutContent padding={4}>
+          <VStack gap={3}><Skeleton height={28} width={200} /><Skeleton height={240} /></VStack>
+        </LayoutContent>
+      </Layout>
     );
   }
 
   if (!hasAccess) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center space-y-2">
-          <h2 className="text-lg font-semibold">Access Denied</h2>
-          <p className="text-sm text-muted-foreground">You don&apos;t have access to this project.</p>
-        </div>
-      </div>
+      <Layout>
+        <LayoutContent padding={4}>
+          <Banner status="error" title="Access denied" description="You don't have access to this project." />
+        </LayoutContent>
+      </Layout>
     );
   }
 
-  // Workspace members not yet in this project
   const projectMemberIds = new Set(projectMembers.map((m) => m.userId));
   const availableMembers = workspaceMembers.filter((m) => !projectMemberIds.has(m.userId));
 
@@ -115,15 +106,17 @@ export default function ProjectMembersPage() {
     }
   };
 
-  const handleRemove = async (userId: string) => {
-    setRemovingId(userId);
+  const handleRemove = async () => {
+    if (!removing) return;
+    setRemoveLoading(true);
     try {
-      await removeProjectMember(workspace.id, projectId!, userId);
+      await removeProjectMember(workspace.id, projectId!, removing.userId);
       toast.success("Member removed");
+      setRemoving(null);
     } catch {
       toast.error("Failed to remove member");
     } finally {
-      setRemovingId(null);
+      setRemoveLoading(false);
     }
   };
 
@@ -136,145 +129,143 @@ export default function ProjectMembersPage() {
     }
   };
 
-  const roleBadgeVariant = (role: ProjectRole) => {
-    if (role === "project_admin") return "default" as const;
-    return "secondary" as const;
-  };
+  const rows = projectMembers as MemberRow[];
 
   return (
-    <MotionPage className="flex flex-col h-full">
-      <ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} />
-      <div className="flex-1 overflow-auto p-6 max-w-2xl space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Members ({projectMembers.length})</h2>
-          {isProjectAdmin && (
-            <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add member
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add project member</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-2">
-                  {availableMembers.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      All workspace members are already in this project.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Member</label>
-                        <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a member" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableMembers.map((m) => (
-                              <SelectItem key={m.userId} value={m.userId}>
-                                {m.profile?.name || m.profile?.email || m.userId}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Role</label>
-                        <Select value={selectedRole} onValueChange={(v) => setSelectedRole(v as ProjectRole)}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="project_admin">Project Admin</SelectItem>
-                            <SelectItem value="member">Member</SelectItem>
-                            <SelectItem value="viewer">Viewer</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <Button onClick={handleAdd} disabled={!selectedUserId || adding} className="w-full">
-                        {adding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Add to project
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
+    <>
+    <Layout
+      header={<ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} />}
+      content={
+        <Layout
+          header={
+            <LayoutHeader hasDivider>
+              <HStack justify="between" align="center" paddingInline={4} paddingBlock={3}>
+                <Heading level={2}>Members ({projectMembers.length})</Heading>
+                {isProjectAdmin && (
+                  <Button label="Add member" variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => setAddDialogOpen(true)} />
+                )}
+              </HStack>
+            </LayoutHeader>
+          }
+          content={
+            <LayoutContent padding={0}>
+              {projectMembers.length === 0 ? (
+                <EmptyState icon={<Users size={28} />} title="No members yet" description="Add workspace members to this project." />
+              ) : (
+                <Table
+                  data={rows}
+                  idKey="userId"
+                  hasHover
+                  dividers="rows"
+                  columns={[
+                    {
+                      key: "member",
+                      header: "Member",
+                      width: proportional(2),
+                      renderCell: (m: MemberRow) => {
+                        const isSelf = m.userId === user?.uid;
+                        return (
+                          <HStack gap={2} align="center">
+                            <Avatar size="small" src={m.profile?.avatarUrl ?? undefined} name={m.profile?.name ?? "Unknown"} />
+                            <VStack gap={0}>
+                              <Text type="body" weight="medium">
+                                {m.profile?.name || "Unknown"}{isSelf ? " (you)" : ""}
+                              </Text>
+                              {m.profile?.email && <Text type="supporting" color="secondary">{m.profile.email}</Text>}
+                            </VStack>
+                          </HStack>
+                        );
+                      },
+                    },
+                    {
+                      key: "role",
+                      header: "Role",
+                      width: pixel(160),
+                      renderCell: (m: MemberRow) => (
+                        <Token label={PROJECT_ROLE_LABELS[m.role]} color={ROLE_TOKEN_COLOR[m.role]} />
+                      ),
+                    },
+                    {
+                      key: "actions",
+                      header: "",
+                      width: pixel(56),
+                      align: "end",
+                      renderCell: (m: MemberRow) => {
+                        const isSelf = m.userId === user?.uid;
+                        if (!isProjectAdmin || isSelf) return null;
+                        const items = [
+                          ...(m.role !== "project_admin" ? [{ label: "Make project admin", onClick: () => handleRoleChange(m.userId, "project_admin") }] : []),
+                          ...(m.role !== "member" ? [{ label: "Set as member", onClick: () => handleRoleChange(m.userId, "member") }] : []),
+                          ...(m.role !== "viewer" ? [{ label: "Set as viewer", onClick: () => handleRoleChange(m.userId, "viewer") }] : []),
+                          { type: "divider" as const },
+                          { label: "Remove from project", onClick: () => setRemoving(m) },
+                        ];
+                        return <MoreMenu label="Member actions" items={items} />;
+                      },
+                    },
+                  ]}
+                />
+              )}
+            </LayoutContent>
+          }
+        />
+      }
+    />
 
-        <StaggerContainer className="space-y-2">
-          {projectMembers.map((m) => {
-            const isSelf = m.userId === user?.uid;
-            return (
-              <StaggerItem key={m.userId} className="flex items-center justify-between p-3 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={m.profile?.avatarUrl ?? undefined} />
-                    <AvatarFallback className="text-sm">{getInitials(m.profile?.name)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium">
-                      {m.profile?.name || "Unknown"}
-                      {isSelf && <span className="text-muted-foreground ml-1">(you)</span>}
-                    </p>
-                    {m.profile?.email && (
-                      <p className="text-xs text-muted-foreground">{m.profile.email}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={roleBadgeVariant(m.role)}>{PROJECT_ROLE_LABELS[m.role]}</Badge>
-                  {isProjectAdmin && !isSelf && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          {removingId === m.userId ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <MoreHorizontal className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {m.role !== "project_admin" && (
-                          <DropdownMenuItem onClick={() => handleRoleChange(m.userId, "project_admin")}>
-                            <Shield className="mr-2 h-4 w-4" />
-                            Make project admin
-                          </DropdownMenuItem>
-                        )}
-                        {m.role !== "member" && (
-                          <DropdownMenuItem onClick={() => handleRoleChange(m.userId, "member")}>
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Set as member
-                          </DropdownMenuItem>
-                        )}
-                        {m.role !== "viewer" && (
-                          <DropdownMenuItem onClick={() => handleRoleChange(m.userId, "viewer")}>
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Set as viewer
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => handleRemove(m.userId)}
-                        >
-                          <UserMinus className="mr-2 h-4 w-4" />
-                          Remove from project
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              </StaggerItem>
-            );
-          })}
-        </StaggerContainer>
-      </div>
-    </MotionPage>
+    {addDialogOpen && (
+      <Dialog isOpen={addDialogOpen} onOpenChange={setAddDialogOpen} purpose="form" width={440}>
+        <Layout
+          header={<DialogHeader title="Add project member" onOpenChange={setAddDialogOpen} />}
+          content={
+            <LayoutContent padding={4}>
+              {availableMembers.length === 0 ? (
+                <Banner status="info" title="Everyone's already here" description="All workspace members are already in this project." />
+              ) : (
+                <FormLayout>
+                  <Selector
+                    label="Member"
+                    placeholder="Select a member"
+                    value={selectedUserId}
+                    onChange={setSelectedUserId}
+                    options={availableMembers.map((m) => ({ value: m.userId, label: m.profile?.name || m.profile?.email || m.userId }))}
+                  />
+                  <Selector
+                    label="Role"
+                    value={selectedRole}
+                    onChange={(v) => setSelectedRole(v as ProjectRole)}
+                    options={[
+                      { value: "project_admin", label: "Project Admin" },
+                      { value: "member", label: "Member" },
+                      { value: "viewer", label: "Viewer" },
+                    ]}
+                  />
+                </FormLayout>
+              )}
+            </LayoutContent>
+          }
+          footer={
+            availableMembers.length === 0 ? undefined : (
+              <LayoutFooter hasDivider>
+                <HStack gap={2} hAlign="end">
+                  <Button label="Cancel" variant="secondary" onClick={() => setAddDialogOpen(false)} />
+                  <Button label="Add to project" variant="primary" isDisabled={!selectedUserId} isLoading={adding} clickAction={handleAdd} />
+                </HStack>
+              </LayoutFooter>
+            )
+          }
+        />
+      </Dialog>
+    )}
+
+    <AlertDialog
+      isOpen={!!removing}
+      onOpenChange={(v) => !v && setRemoving(null)}
+      title="Remove member"
+      description={`Remove ${removing?.profile?.name ?? "this member"} from the project? They will lose access to project resources.`}
+      actionLabel="Remove"
+      isActionLoading={removeLoading}
+      onAction={handleRemove}
+    />
+    </>
   );
 }

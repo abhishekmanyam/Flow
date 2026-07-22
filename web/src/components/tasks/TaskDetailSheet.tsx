@@ -1,31 +1,32 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { motion } from "motion/react";
 import Markdown from "react-markdown";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { toast } from "sonner";
-import { format, formatDistanceToNow } from "date-fns";
-import { Textarea } from "@/components/ui/textarea";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Separator } from "@/components/ui/separator";
+import { Dialog } from "@astryxdesign/core/Dialog";
+import { Layout, LayoutContent } from "@astryxdesign/core/Layout";
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
+import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+import { TabList, Tab } from "@astryxdesign/core/TabList";
+import { Selector } from "@astryxdesign/core/Selector";
+import { DateInput } from "@astryxdesign/core/DateInput";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { TextArea } from "@astryxdesign/core/TextArea";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { Divider } from "@astryxdesign/core/Divider";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Timestamp as TimestampText } from "@astryxdesign/core/Timestamp";
+import { format } from "date-fns";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Plus, Send, Clock, MessageSquare, ListChecks, History, Paperclip, Calendar, Signal, User, Hash, Tag, Layers, Zap, Copy, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+  MessageSquare, ListChecks, History, Paperclip, Signal, User, Hash, Tag, Layers, Zap,
+  Copy, Trash2, Send, Plus, Pencil, Calendar, X,
+} from "lucide-react";
 import { parseLocalDate } from "@/lib/date-utils";
 import LabelPicker from "@/components/labels/LabelPicker";
 import EpicPicker from "@/components/epics/EpicPicker";
@@ -33,6 +34,7 @@ import SprintPicker from "@/components/sprints/SprintPicker";
 import SubtaskRow from "./SubtaskRow";
 import MentionInput from "./MentionInput";
 import TaskAttachments from "./TaskAttachments";
+import { toast } from "@/components/system/toast";
 import { useAuthStore } from "@/store/auth";
 import {
   subscribeToSubtasks, subscribeToComments, subscribeToTaskEvents,
@@ -41,6 +43,7 @@ import {
 import { getDoc } from "firebase/firestore";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS, STORY_POINT_OPTIONS } from "@/lib/types";
 import type { Task, Subtask, Comment, TaskEvent, Project, WorkspaceMember, Label, Epic, Sprint, TaskStatus, TaskPriority } from "@/lib/types";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
 
 function tsToDate(ts: unknown): Date {
   if (!ts) return new Date();
@@ -48,11 +51,6 @@ function tsToDate(ts: unknown): Date {
   if (typeof ts === "object" && ts !== null && "seconds" in ts) return new Date((ts as { seconds: number }).seconds * 1000);
   const d = new Date(ts as string | number);
   return isNaN(d.getTime()) ? new Date() : d;
-}
-
-function getInitials(name: string | null | undefined) {
-  if (!name) return "?";
-  return name.split(/\s/).map((s) => s[0]?.toUpperCase()).slice(0, 2).join("");
 }
 
 function eventLabel(ev: TaskEvent, members: Map<string, string>): string {
@@ -76,20 +74,19 @@ function eventLabel(ev: TaskEvent, members: Map<string, string>): string {
 }
 
 function CommentBody({ body, memberNames }: { body: string; memberNames: Set<string> }) {
-  // Split on @Name patterns and highlight matching ones
   const parts = body.split(/(@\S+(?:\s\S+)?)/g);
   return (
-    <>
+    <Text type="body">
       {parts.map((part, i) => {
         if (part.startsWith("@")) {
           const name = part.slice(1);
           if (memberNames.has(name)) {
-            return <span key={i} className="text-primary font-medium">{part}</span>;
+            return <Text key={i} as="span" color="accent" weight="medium">{part}</Text>;
           }
         }
-        return <span key={i}>{part}</span>;
+        return <Text key={i} as="span" color="secondary">{part}</Text>;
       })}
-    </>
+    </Text>
   );
 }
 
@@ -135,8 +132,8 @@ export default function TaskDetailSheet({
   const [descDraft, setDescDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState("comments");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
-  // Build member name map for event labels (js-index-maps rule)
   useEffect(() => {
     const ids = members.map((m) => m.userId);
     if (ids.length === 0) return;
@@ -149,7 +146,6 @@ export default function TaskDetailSheet({
 
   useEffect(() => {
     if (!taskId) { setTask(null); return; }
-    // Load initial task data
     getDoc(taskDoc(workspaceId, project.id, taskId)).then((snap) => {
       if (snap.exists()) {
         const t = { id: snap.id, ...snap.data() } as Task;
@@ -159,7 +155,6 @@ export default function TaskDetailSheet({
       }
     });
 
-    // Subscribe to subcollections in parallel
     const unsubs = [
       subscribeToSubtasks(workspaceId, project.id, taskId, setSubtasks),
       subscribeToComments(workspaceId, project.id, taskId, setComments),
@@ -227,6 +222,7 @@ export default function TaskDetailSheet({
     try {
       await softDeleteTask(workspaceId, project.id, task.id);
       toast.success("Task deleted");
+      setDeleteOpen(false);
       onClose();
     } catch { toast.error("Failed to delete task"); }
   };
@@ -252,301 +248,127 @@ export default function TaskDetailSheet({
   if (!taskId) return null;
 
   return (
-    <Sheet open={!!taskId} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-3xl overflow-hidden flex flex-col p-0 gap-0">
-        {!task ? (
-          <div className="p-6 space-y-4">
-            <Skeleton className="h-6 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-32 w-full" />
-          </div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-            className="flex-1 overflow-hidden flex flex-col"
-          >
-            {/* Title header */}
-            <div className="px-6 pt-5 pb-4 border-b shrink-0">
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-xs text-muted-foreground">
-                  Created {formatDistanceToNow(tsToDate(task.createdAt), { addSuffix: true })}
-                </p>
-                {canEdit && (
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleDuplicate}>
-                      <Copy className="mr-1.5 h-3.5 w-3.5" />Duplicate
-                    </Button>
-                    {isProjectAdmin && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive">
-                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />Delete
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete task</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will delete &ldquo;{task.title}&rdquo;. The task will be removed from all views.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
-                  </div>
-                )}
-              </div>
-              {editingTitle ? (
-                <Input value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
-                  onBlur={handleTitleSave} onKeyDown={(e) => e.key === "Enter" && handleTitleSave()}
-                  className="text-lg font-semibold" autoFocus />
+    <>
+    <Dialog
+      isOpen={!!taskId}
+      onOpenChange={(v) => !v && onClose()}
+      width={460}
+      maxHeight="100vh"
+      position={{ top: 0, right: 0, bottom: 0 }}
+    >
+      {!task ? (
+        <VStack padding={6} gap={3} align="center" justify="center" minHeight={200}>
+          <Spinner label="Loading task…" />
+        </VStack>
+      ) : (
+        <Layout
+          header={
+            <VStack gap={2} padding={4}>
+              <HStack justify="between" align="center">
+                <HStack gap={1} align="center">
+                  <Text type="supporting" color="secondary">Created</Text>
+                  <TimestampText value={tsToDate(task.createdAt).toISOString()} format="relative" type="supporting" />
+                </HStack>
+                <HStack gap={1} align="center">
+                  {canEdit && (
+                    <Button label="Duplicate" variant="ghost" size="sm" icon={<Copy />} onClick={handleDuplicate} />
+                  )}
+                  {canEdit && isProjectAdmin && (
+                    <IconButton label="Delete task" tooltip="Delete" variant="ghost" size="sm" icon={<Trash2 />} onClick={() => setDeleteOpen(true)} />
+                  )}
+                  <IconButton label="Close" tooltip="Close" variant="ghost" size="sm" icon={<X />} onClick={onClose} />
+                </HStack>
+              </HStack>
+              {editingTitle && canEdit ? (
+                <TextInput
+                  label="Task title"
+                  isLabelHidden
+                  value={titleDraft}
+                  onChange={setTitleDraft}
+                  hasAutoFocus
+                />
               ) : (
-                <h2 className={cn("text-lg font-semibold leading-snug", canEdit && "cursor-pointer hover:text-primary transition-colors")}
-                  onClick={() => canEdit && setEditingTitle(true)}>
-                  {task.title}
-                </h2>
+                <HStack gap={1} align="center" justify="between">
+                  <Heading level={2} maxLines={3}>{task.title}</Heading>
+                  {canEdit && (
+                    <IconButton label="Edit title" tooltip="Edit title" variant="ghost" size="sm" icon={<Pencil />} onClick={() => { setTitleDraft(task.title); setEditingTitle(true); }} />
+                  )}
+                </HStack>
               )}
-            </div>
-
-            {/* Two-panel layout */}
-            <div className="flex-1 overflow-hidden flex">
-              {/* Left panel — description + tabs */}
-              <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-                {/* Scrollable content */}
-                <div className="flex-1 overflow-y-auto">
-                  {/* Description */}
-                  <div className="px-6 py-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Description</p>
-                    {editingDesc ? (
-                      <Textarea value={descDraft} onChange={(e) => setDescDraft(e.target.value)}
-                        onBlur={handleDescSave} placeholder="Add a description..."
-                        className="text-sm min-h-[80px]" autoFocus />
-                    ) : task.description ? (
-                      <div
-                        className={cn("prose prose-sm dark:prose-invert max-w-none text-muted-foreground prose-headings:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded-sm prose-code:before:content-none prose-code:after:content-none",
-                          canEdit && "cursor-pointer hover:text-foreground transition-colors rounded-md")}
-                        onClick={() => { if (canEdit) { setDescDraft(task.description ?? ""); setEditingDesc(true); } }}
-                      >
-                        <Markdown>{task.description}</Markdown>
-                      </div>
-                    ) : (
-                      <p className={cn("text-sm text-muted-foreground italic",
-                          canEdit && "cursor-pointer hover:text-foreground transition-colors rounded-md")}
-                        onClick={() => { if (canEdit) { setDescDraft(task.description ?? ""); setEditingDesc(true); } }}>
-                        {canEdit ? "Click to add a description..." : "No description"}
-                      </p>
-                    )}
-                  </div>
-
-                  <Separator />
-
-                  {/* Tabs */}
-                  <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col">
-                    <TabsList className="mx-6 mt-3 w-auto justify-start">
-                      <TabsTrigger value="comments"><MessageSquare className="mr-1.5 h-3.5 w-3.5" />Comments ({comments.length})</TabsTrigger>
-                      <TabsTrigger value="subtasks"><ListChecks className="mr-1.5 h-3.5 w-3.5" />Subtasks ({subtasks.length})</TabsTrigger>
-                      <TabsTrigger value="attachments"><Paperclip className="mr-1.5 h-3.5 w-3.5" />Files ({task.attachments?.length ?? 0})</TabsTrigger>
-                      <TabsTrigger value="history"><Clock className="mr-1.5 h-3.5 w-3.5" />History</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="comments" className="mt-0 px-6">
-                      <div className="py-3">
-                        {comments.length === 0 ? (
-                          <EmptyState icon={MessageSquare} title="No comments yet" description="Start the conversation" className="py-6" />
-                        ) : (
-                          <div className="space-y-4">
-                            {comments.map((c) => (
-                              <div key={c.id} className="flex gap-3">
-                                <Avatar className="h-7 w-7 shrink-0">
-                                  <AvatarImage src={c.author?.avatarUrl ?? memberAvatarMap.get(c.userId)} />
-                                  <AvatarFallback className="text-xs">{getInitials(c.author?.name ?? memberNameMap.get(c.userId))}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-baseline gap-2">
-                                    <span className="text-sm font-medium">{c.author?.name ?? memberNameMap.get(c.userId) ?? "Unknown"}</span>
-                                    <span className="text-xs text-muted-foreground">{formatDistanceToNow(tsToDate(c.createdAt), { addSuffix: true })}</span>
-                                  </div>
-                                  <p className="text-sm mt-0.5 text-muted-foreground">
-                                    <CommentBody body={c.body} memberNames={memberNameSet} />
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="subtasks" className="mt-0 px-6">
-                      <div className="py-3">
-                        {subtasks.length === 0 ? (
-                          <EmptyState icon={ListChecks} title="No subtasks yet" description="Break this task into smaller steps" className="py-6" />
-                        ) : (
-                          <div className="space-y-1">
-                            {subtasks.map((s) => (
-                              <SubtaskRow
-                                key={s.id}
-                                subtask={s}
-                                members={members}
-                                canEdit={canEdit}
-                                onToggle={() => handleSubtaskToggle(s)}
-                                onUpdate={(changes) => handleSubtaskUpdate(s.id, changes)}
-                                onDelete={() => handleSubtaskDelete(s.id)}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="attachments" className="mt-0 px-6">
-                      <TaskAttachments
-                        attachments={task.attachments ?? []}
-                        workspaceId={workspaceId}
-                        projectId={project.id}
-                        taskId={task.id}
-                        currentUserId={currentUserId}
-                        canEdit={canEdit}
-                        onAttachmentsChange={(updated) => setTask((prev) => prev ? { ...prev, attachments: updated } : prev)}
-                      />
-                    </TabsContent>
-
-                    <TabsContent value="history" className="mt-0 px-6">
-                      <div className="py-3">
-                        {events.length === 0 ? (
-                          <EmptyState icon={History} title="No history yet" description="Changes to this task will be tracked here" className="py-6" />
-                        ) : (
-                          <div className="space-y-3">
-                            {events.map((ev) => (
-                              <div key={ev.id} className="flex gap-3">
-                                <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground mt-2 shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm">{eventLabel(ev, memberNameMap)}</p>
-                                  <p className="text-xs text-muted-foreground mt-0.5">{formatDistanceToNow(tsToDate(ev.createdAt), { addSuffix: true })}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-
-                {/* Fixed bottom input bars */}
-                {activeTab === "comments" && (
-                  <div className="shrink-0 py-3 flex gap-2 border-t px-6 bg-background">
-                    <MentionInput
-                      placeholder="Add a comment... (type @ to mention)"
-                      value={commentText}
-                      onChange={setCommentText}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleComment(); } }}
-                      members={members}
-                      className="flex-1"
+              {editingTitle && canEdit && (
+                <HStack gap={2}>
+                  <Button label="Save" variant="primary" size="sm" onClick={handleTitleSave} />
+                  <Button label="Cancel" variant="ghost" size="sm" onClick={() => setEditingTitle(false)} />
+                </HStack>
+              )}
+            </VStack>
+          }
+          content={
+            <LayoutContent padding={4}>
+              <VStack gap={4}>
+                {/* Field rows */}
+                <MetadataList label={{ position: "start", width: 96 }}>
+                  <MetadataListItem label="Status" icon={<Icon icon={Signal} size="sm" />}>
+                    <Selector
+                      label="Status"
+                      isLabelHidden
+                      size="sm"
+                      value={task.status}
+                      onChange={(v) => updateField("status", v)}
+                      isDisabled={!canEdit}
+                      options={(Object.entries(TASK_STATUS_LABELS) as [string, string][]).map(([v, l]) => ({ value: v, label: l }))}
                     />
-                    <Button size="icon" onClick={handleComment} disabled={!commentText.trim() || sending}>
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-                {activeTab === "subtasks" && canEdit && (
-                  <div className="shrink-0 py-3 flex gap-2 border-t px-6 bg-background">
-                    <Input placeholder="Add subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleAddSubtask()} className="flex-1" />
-                    <Button size="icon" variant="outline" onClick={handleAddSubtask} disabled={!newSubtask.trim()}>
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Right sidebar — metadata */}
-              <div className="w-64 shrink-0 border-l overflow-y-auto bg-muted/30">
-                <div className="p-4 space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Details</p>
-
-                  {/* Status */}
-                  <div className="flex items-center gap-2 py-1.5">
-                    <Signal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-xs text-muted-foreground w-16 shrink-0">Status</span>
-                    <Select value={task.status} onValueChange={(v) => updateField("status", v)} disabled={!canEdit}>
-                      <SelectTrigger className="h-7 text-xs flex-1 border-0 bg-transparent shadow-none px-1.5 hover:bg-muted"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {(Object.entries(TASK_STATUS_LABELS) as [string, string][]).map(([v, l]) => (
-                          <SelectItem key={v} value={v}>{l}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Priority */}
-                  <div className="flex items-center gap-2 py-1.5">
-                    <Signal className="h-3.5 w-3.5 text-muted-foreground shrink-0 rotate-180" />
-                    <span className="text-xs text-muted-foreground w-16 shrink-0">Priority</span>
-                    <Select value={task.priority} onValueChange={(v) => updateField("priority", v)} disabled={!canEdit}>
-                      <SelectTrigger className="h-7 text-xs flex-1 border-0 bg-transparent shadow-none px-1.5 hover:bg-muted"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {(Object.entries(TASK_PRIORITY_LABELS) as [string, string][]).map(([v, l]) => (
-                          <SelectItem key={v} value={v}>{l}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Assignee */}
-                  <div className="flex items-center gap-2 py-1.5">
-                    <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-xs text-muted-foreground w-16 shrink-0">Assignee</span>
-                    <Select value={task.assigneeId ?? "unassigned"} onValueChange={(v) => updateField("assigneeId", v === "unassigned" ? null : v)} disabled={!canEdit}>
-                      <SelectTrigger className="h-7 text-xs flex-1 border-0 bg-transparent shadow-none px-1.5 hover:bg-muted"><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {members.map((m) => <SelectItem key={m.userId} value={m.userId}>{m.profile?.name ?? "Unknown"}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Due date */}
-                  <div className="flex items-center gap-2 py-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-xs text-muted-foreground w-16 shrink-0">Due date</span>
-                    <Input type="date" className="h-7 text-xs flex-1 border-0 bg-transparent shadow-none px-1.5 hover:bg-muted"
-                      value={task.dueDate ? format(tsToDate(task.dueDate), "yyyy-MM-dd") : ""}
-                      onChange={(e) => updateField("dueDate", e.target.value ? parseLocalDate(e.target.value) : null)}
-                      disabled={!canEdit} />
-                  </div>
-
-                  {/* Story Points */}
-                  <div className="flex items-center gap-2 py-1.5">
-                    <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-xs text-muted-foreground w-16 shrink-0">Points</span>
-                    <Select
+                  </MetadataListItem>
+                  <MetadataListItem label="Priority" icon={<Icon icon={Signal} size="sm" />}>
+                    <Selector
+                      label="Priority"
+                      isLabelHidden
+                      size="sm"
+                      value={task.priority}
+                      onChange={(v) => updateField("priority", v)}
+                      isDisabled={!canEdit}
+                      options={(Object.entries(TASK_PRIORITY_LABELS) as [string, string][]).map(([v, l]) => ({ value: v, label: l }))}
+                    />
+                  </MetadataListItem>
+                  <MetadataListItem label="Assignee" icon={<Icon icon={User} size="sm" />}>
+                    <Selector
+                      label="Assignee"
+                      isLabelHidden
+                      size="sm"
+                      placeholder="Unassigned"
+                      value={task.assigneeId ?? "unassigned"}
+                      onChange={(v) => updateField("assigneeId", v === "unassigned" ? null : v)}
+                      isDisabled={!canEdit}
+                      options={[
+                        { value: "unassigned", label: "Unassigned" },
+                        ...members.map((m) => ({ value: m.userId, label: m.profile?.name ?? "Unknown" })),
+                      ]}
+                    />
+                  </MetadataListItem>
+                  <MetadataListItem label="Due date" icon={<Icon icon={Calendar} size="sm" />}>
+                    <DateInput
+                      label="Due date"
+                      isLabelHidden
+                      size="sm"
+                      hasClear
+                      value={task.dueDate ? (format(tsToDate(task.dueDate), "yyyy-MM-dd") as ISODateString) : undefined}
+                      onChange={(v) => updateField("dueDate", v ? parseLocalDate(v) : null)}
+                      isDisabled={!canEdit}
+                    />
+                  </MetadataListItem>
+                  <MetadataListItem label="Points" icon={<Icon icon={Hash} size="sm" />}>
+                    <Selector
+                      label="Story points"
+                      isLabelHidden
+                      size="sm"
+                      placeholder="None"
                       value={task.storyPoints != null ? String(task.storyPoints) : "none"}
-                      onValueChange={(v) => updateField("storyPoints", v === "none" ? null : Number(v))}
-                      disabled={!canEdit}
-                    >
-                      <SelectTrigger className="h-7 text-xs flex-1 border-0 bg-transparent shadow-none px-1.5 hover:bg-muted"><SelectValue placeholder="None" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {STORY_POINT_OPTIONS.map((v) => (
-                          <SelectItem key={v} value={String(v)}>{v}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <Separator className="my-2" />
-
-                  {/* Labels */}
-                  <div className="py-1.5">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      <span className="text-xs text-muted-foreground">Labels</span>
-                    </div>
+                      onChange={(v) => updateField("storyPoints", v === "none" ? null : Number(v))}
+                      isDisabled={!canEdit}
+                      options={[{ value: "none", label: "None" }, ...STORY_POINT_OPTIONS.map((v) => ({ value: String(v), label: String(v) }))]}
+                    />
+                  </MetadataListItem>
+                  <MetadataListItem label="Labels" icon={<Icon icon={Tag} size="sm" />}>
                     <LabelPicker
                       labels={labels}
                       selectedIds={task.labelIds ?? []}
@@ -555,45 +377,171 @@ export default function TaskDetailSheet({
                       workspaceId={workspaceId}
                       projectId={project.id}
                     />
-                  </div>
-
-                  {/* Epic */}
+                  </MetadataListItem>
                   {epics.length > 0 && (
-                    <div className="py-1.5">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-xs text-muted-foreground">Epic</span>
-                      </div>
-                      <EpicPicker
-                        epics={epics}
-                        selectedId={task.epicId ?? null}
-                        onChange={(id) => updateField("epicId", id)}
-                        disabled={!canEdit}
-                      />
-                    </div>
+                    <MetadataListItem label="Epic" icon={<Icon icon={Layers} size="sm" />}>
+                      <EpicPicker epics={epics} selectedId={task.epicId ?? null} onChange={(id) => updateField("epicId", id)} disabled={!canEdit} />
+                    </MetadataListItem>
                   )}
-
-                  {/* Sprint */}
                   {sprints.length > 0 && (
-                    <div className="py-1.5">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <Zap className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-xs text-muted-foreground">Sprint</span>
-                      </div>
-                      <SprintPicker
-                        sprints={sprints}
-                        selectedId={task.sprintId ?? null}
-                        onChange={(id) => updateField("sprintId", id)}
-                        disabled={!canEdit}
-                      />
-                    </div>
+                    <MetadataListItem label="Sprint" icon={<Icon icon={Zap} size="sm" />}>
+                      <SprintPicker sprints={sprints} selectedId={task.sprintId ?? null} onChange={(id) => updateField("sprintId", id)} disabled={!canEdit} />
+                    </MetadataListItem>
                   )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </SheetContent>
-    </Sheet>
+                </MetadataList>
+
+                <Divider />
+
+                {/* Description */}
+                <VStack gap={2}>
+                  <Text type="label" color="secondary">Description</Text>
+                  {editingDesc ? (
+                    <VStack gap={2}>
+                      <TextArea label="Description" isLabelHidden value={descDraft} onChange={setDescDraft} placeholder="Add a description..." rows={4} hasAutoFocus />
+                      <HStack gap={2}>
+                        <Button label="Save" variant="primary" size="sm" onClick={handleDescSave} />
+                        <Button label="Cancel" variant="ghost" size="sm" onClick={() => setEditingDesc(false)} />
+                      </HStack>
+                    </VStack>
+                  ) : task.description ? (
+                    <HStack gap={2} align="start" justify="between">
+                      <VStack gap={1}>
+                        <Markdown>{task.description}</Markdown>
+                      </VStack>
+                      {canEdit && (
+                        <IconButton label="Edit description" tooltip="Edit" variant="ghost" size="sm" icon={<Pencil />} onClick={() => { setDescDraft(task.description ?? ""); setEditingDesc(true); }} />
+                      )}
+                    </HStack>
+                  ) : (
+                    <Button
+                      label={canEdit ? "Add a description..." : "No description"}
+                      variant="ghost"
+                      size="sm"
+                      isDisabled={!canEdit}
+                      onClick={() => { setDescDraft(task.description ?? ""); setEditingDesc(true); }}
+                    />
+                  )}
+                </VStack>
+
+                <Divider />
+
+                {/* Activity tabs */}
+                <TabList value={activeTab} onChange={setActiveTab} size="sm" hasDivider>
+                  <Tab value="comments" label="Comments" icon={<MessageSquare />} endContent={comments.length ? <Badge variant="neutral" label={String(comments.length)} /> : undefined} />
+                  <Tab value="subtasks" label="Subtasks" icon={<ListChecks />} endContent={subtasks.length ? <Badge variant="neutral" label={String(subtasks.length)} /> : undefined} />
+                  <Tab value="attachments" label="Files" icon={<Paperclip />} endContent={task.attachments?.length ? <Badge variant="neutral" label={String(task.attachments.length)} /> : undefined} />
+                  <Tab value="history" label="History" icon={<History />} />
+                </TabList>
+
+                {activeTab === "comments" && (
+                  <VStack gap={3}>
+                    {comments.length === 0 ? (
+                      <EmptyState icon={<MessageSquare />} title="No comments yet" description="Start the conversation" isCompact />
+                    ) : (
+                      <VStack gap={3}>
+                        {comments.map((c) => (
+                          <HStack key={c.id} gap={2} align="start">
+                            <Avatar size="small" name={c.author?.name ?? memberNameMap.get(c.userId) ?? undefined} src={c.author?.avatarUrl ?? memberAvatarMap.get(c.userId)} />
+                            <VStack gap={0} width="fill">
+                              <HStack gap={2} align="center">
+                                <Text type="label">{c.author?.name ?? memberNameMap.get(c.userId) ?? "Unknown"}</Text>
+                                <TimestampText value={tsToDate(c.createdAt).toISOString()} format="relative" type="supporting" size="2xs" />
+                              </HStack>
+                              <CommentBody body={c.body} memberNames={memberNameSet} />
+                            </VStack>
+                          </HStack>
+                        ))}
+                      </VStack>
+                    )}
+                    <HStack gap={2} align="end">
+                      <HStack width="fill">
+                        <MentionInput
+                          placeholder="Add a comment... (type @ to mention)"
+                          value={commentText}
+                          onChange={setCommentText}
+                          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleComment(); } }}
+                          members={members}
+                        />
+                      </HStack>
+                      <IconButton label="Send comment" tooltip="Send" variant="primary" icon={<Send />} isDisabled={!commentText.trim() || sending} isLoading={sending} onClick={handleComment} />
+                    </HStack>
+                  </VStack>
+                )}
+
+                {activeTab === "subtasks" && (
+                  <VStack gap={2}>
+                    {canEdit && (
+                      <HStack gap={2} align="end">
+                        <HStack width="fill">
+                          <TextInput label="New subtask" isLabelHidden placeholder="Add subtask..." value={newSubtask} onChange={setNewSubtask} />
+                        </HStack>
+                        <IconButton label="Add subtask" tooltip="Add" variant="secondary" icon={<Plus />} isDisabled={!newSubtask.trim()} onClick={handleAddSubtask} />
+                      </HStack>
+                    )}
+                    {subtasks.length === 0 ? (
+                      <EmptyState icon={<ListChecks />} title="No subtasks yet" description="Break this task into smaller steps" isCompact />
+                    ) : (
+                      <VStack gap={1}>
+                        {subtasks.map((s) => (
+                          <SubtaskRow
+                            key={s.id}
+                            subtask={s}
+                            members={members}
+                            canEdit={canEdit}
+                            onToggle={() => handleSubtaskToggle(s)}
+                            onUpdate={(changes) => handleSubtaskUpdate(s.id, changes)}
+                            onDelete={() => handleSubtaskDelete(s.id)}
+                          />
+                        ))}
+                      </VStack>
+                    )}
+                  </VStack>
+                )}
+
+                {activeTab === "attachments" && (
+                  <TaskAttachments
+                    attachments={task.attachments ?? []}
+                    workspaceId={workspaceId}
+                    projectId={project.id}
+                    taskId={task.id}
+                    currentUserId={currentUserId}
+                    canEdit={canEdit}
+                    onAttachmentsChange={(updated) => setTask((prev) => prev ? { ...prev, attachments: updated } : prev)}
+                  />
+                )}
+
+                {activeTab === "history" && (
+                  events.length === 0 ? (
+                    <EmptyState icon={<History />} title="No history yet" description="Changes to this task will be tracked here" isCompact />
+                  ) : (
+                    <VStack gap={2}>
+                      {events.map((ev) => (
+                        <HStack key={ev.id} gap={2} align="start">
+                          <Icon icon={History} size="sm" color="secondary" />
+                          <VStack gap={0} width="fill">
+                            <Text type="body">{eventLabel(ev, memberNameMap)}</Text>
+                            <TimestampText value={tsToDate(ev.createdAt).toISOString()} format="relative" type="supporting" size="2xs" />
+                          </VStack>
+                        </HStack>
+                      ))}
+                    </VStack>
+                  )
+                )}
+              </VStack>
+            </LayoutContent>
+          }
+        />
+      )}
+    </Dialog>
+
+      <AlertDialog
+        isOpen={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete task"
+        description={task ? `This will delete "${task.title}". The task will be removed from all views.` : "This will delete the task."}
+        actionLabel="Delete"
+        onAction={handleDelete}
+      />
+    </>
   );
 }

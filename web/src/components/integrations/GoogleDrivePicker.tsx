@@ -1,6 +1,6 @@
 import { useRef, useCallback, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { HardDrive, Loader2 } from "lucide-react";
+import { Button } from "@astryxdesign/core/Button";
+import { HardDrive } from "lucide-react";
 import type { TaskAttachment } from "@/lib/types";
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
@@ -131,19 +131,19 @@ export default function GoogleDrivePicker({ onFilePicked, disabled }: GoogleDriv
   const isConfigured = !!CLIENT_ID && !!APP_ID;
 
   if (!isConfigured) {
-    return (
-      <Button variant="outline" size="sm" disabled className="gap-2">
-        <HardDrive className="h-4 w-4" />
-        Google Drive (not configured)
-      </Button>
-    );
+    return <Button label="Google Drive (not configured)" variant="secondary" size="sm" isDisabled icon={<HardDrive />} />;
   }
 
   return (
-    <Button variant="outline" size="sm" disabled={disabled || loading} onClick={handleClick} className="gap-2">
-      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <HardDrive className="h-4 w-4" />}
-      Google Drive
-    </Button>
+    <Button
+      label="Google Drive"
+      variant="secondary"
+      size="sm"
+      isDisabled={disabled}
+      isLoading={loading}
+      icon={<HardDrive />}
+      onClick={handleClick}
+    />
   );
 }
 

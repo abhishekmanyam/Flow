@@ -1,17 +1,23 @@
 import { useState, useCallback } from "react";
+import type { CSSProperties } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import { getCroppedImage } from "@/lib/crop-image";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Loader2 } from "lucide-react";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Text } from "@astryxdesign/core/Text";
+import { Button } from "@astryxdesign/core/Button";
+import { Slider } from "@astryxdesign/core/Slider";
+
+// Scoped exception (DESIGN_SPEC rule 1): react-easy-crop absolutely-positions
+// its own container and requires a sized, position:relative ancestor. No
+// Astryx layout prop exposes `position`, and StyleX isn't compiled in this
+// build, so this ancestor's positioning is set via a geometry-only inline
+// `style` — no visual CSS (color/radius/etc.) here, only the structural
+// position/size third-party lib requirement.
+const cropAreaStyle: CSSProperties = { position: "relative" };
 
 interface AvatarCropDialogProps {
   open: boolean;
@@ -50,43 +56,50 @@ export function AvatarCropDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Crop avatar</DialogTitle>
-        </DialogHeader>
-        <div className="relative h-64 w-full">
-          <Cropper
-            image={imageSrc}
-            crop={crop}
-            zoom={zoom}
-            aspect={1}
-            cropShape="round"
-            onCropChange={setCrop}
-            onZoomChange={setZoom}
-            onCropComplete={onCropChange}
-          />
-        </div>
-        <div className="flex items-center gap-3 px-1">
-          <span className="text-sm text-muted-foreground shrink-0">Zoom</span>
-          <Slider
-            min={1}
-            max={3}
-            step={0.1}
-            value={[zoom]}
-            onValueChange={([v]) => setZoom(v)}
-          />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+    <Dialog isOpen={open} onOpenChange={onOpenChange} purpose="form" width={420}>
+      <Layout
+        header={<DialogHeader title="Crop avatar" onOpenChange={onOpenChange} />}
+        content={
+          <LayoutContent>
+            <VStack gap={4}>
+              <VStack height={256} width="100%" style={cropAreaStyle}>
+                <Cropper
+                  image={imageSrc}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  cropShape="round"
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={onCropChange}
+                />
+              </VStack>
+              <HStack gap={3} align="center">
+                <Text type="supporting" color="secondary">
+                  Zoom
+                </Text>
+                <Slider
+                  label="Zoom"
+                  isLabelHidden
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={zoom}
+                  onChange={(v: number) => setZoom(v)}
+                />
+              </HStack>
+            </VStack>
+          </LayoutContent>
+        }
+        footer={
+          <LayoutFooter>
+            <HStack gap={2} justify="end">
+              <Button label="Cancel" variant="secondary" onClick={() => onOpenChange(false)} />
+              <Button label="Save" variant="primary" onClick={handleSave} isLoading={saving} />
+            </HStack>
+          </LayoutFooter>
+        }
+      />
     </Dialog>
   );
 }

@@ -1,8 +1,16 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
-import { X, Loader2, Trash2 } from "lucide-react";
+import { Toolbar } from "@astryxdesign/core/Toolbar";
+import { Card } from "@astryxdesign/core/Card";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { Text } from "@astryxdesign/core/Text";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Trash2 } from "lucide-react";
+import { toast } from "@/components/system/toast";
 import { writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { taskDoc } from "@/lib/firestore";
@@ -50,49 +58,70 @@ export default function BulkActionBar({
     }
   };
 
+  const statusOptions = (Object.entries(TASK_STATUS_LABELS) as [TaskStatus, string][]).map(([value, label]) => ({ value, label }));
+  const priorityOptions = (Object.entries(TASK_PRIORITY_LABELS) as [TaskPriority, string][]).map(([value, label]) => ({ value, label }));
+  const assigneeOptions = [
+    { value: "unassigned", label: "Unassigned" },
+    ...members.map((m) => ({ value: m.userId, label: m.profile?.name ?? "Unknown" })),
+  ];
+
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-background border rounded-lg shadow-lg px-4 py-2.5 flex items-center gap-3">
-      <span className="text-sm font-medium whitespace-nowrap">{count} selected</span>
-      <Select onValueChange={(v) => bulkUpdate({ status: v as TaskStatus })} disabled={loading}>
-        <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="Status" /></SelectTrigger>
-        <SelectContent>
-          {(Object.entries(TASK_STATUS_LABELS) as [TaskStatus, string][]).map(([v, l]) => (
-            <SelectItem key={v} value={v}>{l}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select onValueChange={(v) => bulkUpdate({ priority: v as TaskPriority })} disabled={loading}>
-        <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="Priority" /></SelectTrigger>
-        <SelectContent>
-          {(Object.entries(TASK_PRIORITY_LABELS) as [TaskPriority, string][]).map(([v, l]) => (
-            <SelectItem key={v} value={v}>{l}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select onValueChange={(v) => bulkUpdate({ assigneeId: v === "unassigned" ? null : v })} disabled={loading}>
-        <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="Assignee" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="unassigned">Unassigned</SelectItem>
-          {members.map((m) => (
-            <SelectItem key={m.userId} value={m.userId}>{m.profile?.name ?? "Unknown"}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {isProjectAdmin && (
-        <Button
-          variant="destructive"
+    // Geometry-only inline style on the outer wrapper (fixed centering); the visible
+    // surface is the Astryx Card + Toolbar below.
+    <VStack style={{ position: "fixed", insetBlockEnd: 24, insetInlineStart: "50%", transform: "translateX(-50%)", zIndex: 50 }}>
+      <Card padding={2}>
+        <Toolbar
+          label="Bulk task actions"
           size="sm"
-          className="h-7 text-xs"
-          disabled={loading}
-          onClick={() => bulkUpdate({ deletedAt: serverTimestamp() } as Partial<Task>)}
-        >
-          <Trash2 className="mr-1.5 h-3.5 w-3.5" />Delete
-        </Button>
-      )}
-      {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClearSelection}>
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
+          startContent={<Text type="label" weight="medium">{count} selected</Text>}
+          endContent={
+            <HStack gap={2} vAlign="center">
+              <Selector
+                label="Set status"
+                placeholder="Status"
+                size="sm"
+                isDisabled={loading}
+                options={statusOptions}
+                onChange={(v) => bulkUpdate({ status: v as TaskStatus })}
+              />
+              <Selector
+                label="Set priority"
+                placeholder="Priority"
+                size="sm"
+                isDisabled={loading}
+                options={priorityOptions}
+                onChange={(v) => bulkUpdate({ priority: v as TaskPriority })}
+              />
+              <Selector
+                label="Set assignee"
+                placeholder="Assignee"
+                size="sm"
+                isDisabled={loading}
+                options={assigneeOptions}
+                onChange={(v) => bulkUpdate({ assigneeId: v === "unassigned" ? null : v })}
+              />
+              {isProjectAdmin && (
+                <Button
+                  label="Delete"
+                  variant="destructive"
+                  size="sm"
+                  isDisabled={loading}
+                  icon={<Icon icon={Trash2} size="sm" />}
+                  onClick={() => bulkUpdate({ deletedAt: serverTimestamp() } as Partial<Task>)}
+                />
+              )}
+              {loading && <Spinner size="sm" label="Updating tasks" />}
+              <IconButton
+                label="Clear selection"
+                size="sm"
+                variant="ghost"
+                icon={<Icon icon="close" size="sm" />}
+                onClick={onClearSelection}
+              />
+            </HStack>
+          }
+        />
+      </Card>
+    </VStack>
   );
 }

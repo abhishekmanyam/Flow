@@ -1,15 +1,21 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { createWorkspace, upsertUserProfile, getUserWorkspace } from "@/lib/firestore";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import PasswordRequirements, { isPasswordValid } from "@/components/auth/PasswordRequirements";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { toast } from "@/components/system/toast";
+import { AppShell } from "@astryxdesign/core/AppShell";
+import { Center } from "@astryxdesign/core/Center";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Card } from "@astryxdesign/core/Card";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Button } from "@astryxdesign/core/Button";
+import { Thumbnail } from "@astryxdesign/core/Thumbnail";
 
 export default function BootstrapPage() {
   const navigate = useNavigate();
@@ -21,8 +27,12 @@ export default function BootstrapPage() {
 
   const slug = wsName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!wsName.trim() || !name.trim() || !email.trim() || !isPasswordValid(password)) {
+      toast.error("Fill in all fields with a valid password");
+      return;
+    }
     setLoading(true);
     try {
       // 1. Create Firebase Auth account
@@ -57,40 +67,60 @@ export default function BootstrapPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center space-y-2">
-          <div className="flex items-center justify-center mb-6">
-            <img src="/flowtask.png" alt="FlowTask" className="h-12" />
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Bootstrap Admin</h1>
-          <p className="text-sm text-muted-foreground">Create the first admin account and workspace</p>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Workspace name</Label>
-            <Input value={wsName} onChange={(e) => setWsName(e.target.value)} required />
-            {slug && <p className="text-xs text-muted-foreground">Slug: {slug}</p>}
-          </div>
-          <div className="space-y-2">
-            <Label>Your name</Label>
-            <Input placeholder="Abhishek" value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input type="email" placeholder="admin@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-          <div className="space-y-2">
-            <Label>Password</Label>
-            <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-            <PasswordRequirements password={password} />
-          </div>
-          <Button type="submit" className="w-full" disabled={loading || !isPasswordValid(password)}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create admin account
-          </Button>
-        </form>
-      </div>
-    </div>
+    <AppShell contentPadding={4}>
+      <Center axis="both" height="100%">
+        <VStack gap={4} hAlign="center" width="100%" maxWidth={400}>
+          <VStack gap={2} hAlign="center">
+            <Thumbnail src="/flowtask.png" alt="FlowTask" label="FlowTask" />
+            <Heading level={1}>Bootstrap Admin</Heading>
+            <Text type="supporting" color="secondary">
+              Create the first admin account and workspace
+            </Text>
+          </VStack>
+
+          <Card padding={8} width="100%">
+            <form onSubmit={handleSubmit}>
+              <FormLayout>
+                <TextInput
+                  label="Workspace name"
+                  value={wsName}
+                  onChange={setWsName}
+                  isRequired
+                  description={slug ? `Slug: ${slug}` : undefined}
+                />
+                <TextInput label="Your name" placeholder="Abhishek" value={name} onChange={setName} isRequired />
+                <TextInput
+                  label="Email"
+                  type="email"
+                  placeholder="admin@company.com"
+                  value={email}
+                  onChange={setEmail}
+                  isRequired
+                />
+                <VStack gap={1}>
+                  <TextInput
+                    label="Password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={setPassword}
+                    isRequired
+                  />
+                  <PasswordRequirements password={password} />
+                </VStack>
+                <Button
+                  type="submit"
+                  label="Create admin account"
+                  variant="primary"
+                  width="100%"
+                  isLoading={loading}
+                  isDisabled={!isPasswordValid(password)}
+                />
+              </FormLayout>
+            </form>
+          </Card>
+        </VStack>
+      </Center>
+    </AppShell>
   );
 }

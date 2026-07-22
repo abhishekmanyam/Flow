@@ -1,6 +1,7 @@
-import type { RegistrationField } from "@/lib/types";
-import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import type { RegistrationField } from "@/lib/types";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Button } from "@astryxdesign/core/Button";
 import RegistrationFieldEditor from "./RegistrationFieldEditor";
 
 interface RegistrationFormBuilderProps {
@@ -22,6 +23,14 @@ export default function RegistrationFormBuilder({
     onChange(fields.filter((_, i) => i !== index));
   };
 
+  const handleMove = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= fields.length) return;
+    const next = [...fields];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
+  };
+
   const handleAddField = () => {
     const newField: RegistrationField = {
       name: `field_${Date.now()}`,
@@ -33,25 +42,26 @@ export default function RegistrationFormBuilder({
   };
 
   return (
-    <div className="space-y-3">
+    <VStack gap={3}>
       {fields.map((field, index) => (
         <RegistrationFieldEditor
           key={field.name}
           field={field}
           onChange={(updated) => handleFieldChange(index, updated)}
           onDelete={() => handleFieldDelete(index)}
+          onMoveUp={() => handleMove(index, -1)}
+          onMoveDown={() => handleMove(index, 1)}
+          isFirst={index === 0}
+          isLast={index === fields.length - 1}
         />
       ))}
       <Button
-        type="button"
-        variant="outline"
+        label="Add field"
+        variant="secondary"
         size="sm"
+        icon={<Plus size={16} />}
         onClick={handleAddField}
-        className="w-full"
-      >
-        <Plus className="mr-2 h-4 w-4" />
-        Add field
-      </Button>
-    </div>
+      />
+    </VStack>
   );
 }

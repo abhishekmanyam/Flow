@@ -1,12 +1,21 @@
-import { useMemo, useRef, useEffect, useState } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronRight } from "lucide-react";
+import { useMemo, useRef, useEffect, useState, Fragment } from "react";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { StackItem } from "@astryxdesign/core/Layout";
+import { Card } from "@astryxdesign/core/Card";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Text } from "@astryxdesign/core/Text";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { ClickableCard } from "@astryxdesign/core/ClickableCard";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
+import { Collapsible } from "@astryxdesign/core/Collapsible";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Icon } from "@astryxdesign/core/Icon";
+import { CalendarClock } from "lucide-react";
 import { format, differenceInDays, addDays, startOfDay, isToday } from "date-fns";
-import { cn } from "@/lib/utils";
-import { STATUS_DOT_COLORS, TASK_STATUS_LABELS } from "@/lib/types";
+import { TASK_STATUS_LABELS } from "@/lib/types";
 import type { Task, WorkspaceMember, Label, Epic, Sprint, TaskStatus } from "@/lib/types";
 
 function tsToDate(ts: unknown): Date | null {
@@ -15,19 +24,24 @@ function tsToDate(ts: unknown): Date | null {
   return new Date(ts as string);
 }
 
-function getInitials(name: string | null | undefined) {
-  if (!name) return "?";
-  return name.split(/\s/).map((s) => s[0]?.toUpperCase()).slice(0, 2).join("");
-}
-
 type Grouping = "status" | "assignee" | "none";
+type DotVariant = "success" | "warning" | "error" | "accent" | "neutral";
+type CardVariant = "gray" | "blue" | "yellow" | "green";
 
-const STATUS_BAR_COLORS: Record<TaskStatus, string> = {
-  backlog: "bg-muted-foreground/40",
-  todo: "bg-slate-400 dark:bg-slate-500",
-  in_progress: "bg-blue-500",
-  in_review: "bg-yellow-500",
-  done: "bg-green-500",
+const STATUS_DOT_VARIANT: Record<TaskStatus, DotVariant> = {
+  backlog: "neutral",
+  todo: "neutral",
+  in_progress: "accent",
+  in_review: "warning",
+  done: "success",
+};
+
+const STATUS_BAR_VARIANT: Record<TaskStatus, CardVariant> = {
+  backlog: "gray",
+  todo: "gray",
+  in_progress: "blue",
+  in_review: "yellow",
+  done: "green",
 };
 
 const STATUS_ORDER: TaskStatus[] = ["backlog", "todo", "in_progress", "in_review", "done"];
@@ -35,6 +49,7 @@ const PX_PER_DAY = 40;
 const SIDEBAR_WIDTH = 220;
 const ROW_HEIGHT = 36;
 const HEADER_HEIGHT = 48;
+const GROUP_HEIGHT = 28;
 
 interface TimelineViewProps {
   tasks: Task[];
@@ -60,8 +75,7 @@ interface TaskGroup {
 export default function TimelineView({ tasks, members, onSelectTask }: TimelineViewProps) {
   const [grouping, setGrouping] = useState<Grouping>("status");
   const [unscheduledOpen, setUnscheduledOpen] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const todayRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLElement | null>(null);
 
   const memberMap = useMemo(() => {
     const m = new Map<string, WorkspaceMember>();
@@ -167,223 +181,199 @@ export default function TimelineView({ tasks, members, onSelectTask }: TimelineV
     return result;
   }, [scheduled, grouping, memberMap]);
 
-  // Scroll to today on mount
-  useEffect(() => {
-    if (todayRef.current && scrollRef.current) {
-      const todayLeft = todayRef.current.offsetLeft;
-      scrollRef.current.scrollLeft = todayLeft - scrollRef.current.clientWidth / 3;
-    }
-  }, [totalDays]);
-
   const todayIdx = differenceInDays(startOfDay(new Date()), rangeStart);
 
+  // Scroll to today on mount
+  useEffect(() => {
+    if (scrollRef.current && todayIdx >= 0) {
+      const todayLeft = todayIdx * PX_PER_DAY + PX_PER_DAY / 2;
+      scrollRef.current.scrollLeft = todayLeft - scrollRef.current.clientWidth / 3;
+    }
+  }, [totalDays, todayIdx]);
+
+  if (scheduled.length === 0 && unscheduled.length === 0) {
+    return (
+      <EmptyState
+        icon={<Icon icon={CalendarClock} size="lg" color="secondary" />}
+        title="Nothing to schedule"
+        description="Tasks with a due date appear on the timeline."
+      />
+    );
+  }
+
+  const renderSidebarRow = (task: Task, muted = false) => {
+    const mem = task.assigneeId ? memberMap.get(task.assigneeId) : null;
+    return (
+      <Fragment key={task.id}>
+        <HStack height={ROW_HEIGHT} vAlign="center" gap={2} paddingInline={3} onClick={() => onSelectTask(task.id)}>
+          <StackItem size="fill">
+            <Text type="body" color={muted ? "secondary" : "primary"} maxLines={1}>{task.title}</Text>
+          </StackItem>
+          {mem && <Avatar size="xsmall" name={mem.profile?.name ?? undefined} src={mem.profile?.avatarUrl ?? undefined} />}
+        </HStack>
+        <Divider />
+      </Fragment>
+    );
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-4 py-2 border-b">
-        <span className="text-sm text-muted-foreground">Group by:</span>
-        <Select value={grouping} onValueChange={(v) => setGrouping(v as Grouping)}>
-          <SelectTrigger className="w-36 h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="status">Status</SelectItem>
-            <SelectItem value="assignee">Assignee</SelectItem>
-            <SelectItem value="none">None</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+    <VStack height="100%">
+      <HStack gap={3} vAlign="center" paddingInline={4} paddingBlock={2}>
+        <Text type="supporting" color="secondary">Group by</Text>
+        <SegmentedControl label="Group by" size="sm" value={grouping} onChange={(v) => setGrouping(v as Grouping)}>
+          <SegmentedControlItem value="status" label="Status" />
+          <SegmentedControlItem value="assignee" label="Assignee" />
+          <SegmentedControlItem value="none" label="None" />
+        </SegmentedControl>
+      </HStack>
+      <Divider />
 
-      <div className="flex-1 overflow-hidden flex">
-        {/* Sidebar */}
-        <div className="shrink-0 border-r overflow-y-auto" style={{ width: SIDEBAR_WIDTH }}>
-          {/* Header spacer */}
-          <div className="border-b" style={{ height: HEADER_HEIGHT }}>
-            <div className="px-3 py-2 text-xs font-medium text-muted-foreground">Task</div>
-          </div>
-          {/* Task rows */}
-          {groups.map((group) => (
-            <div key={group.key}>
-              {grouping !== "none" && (
-                <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50 border-b">
-                  {grouping === "status" && (
-                    <span className={cn("inline-block h-2 w-2 rounded-full mr-1.5", STATUS_DOT_COLORS[group.key as TaskStatus])} />
+      <StackItem size="fill">
+        <HStack height="100%" vAlign="stretch">
+          {/* Sidebar (static width, no shrink) */}
+          <StackItem>
+            <VStack width={SIDEBAR_WIDTH} height="100%" isScrollable>
+              <HStack height={HEADER_HEIGHT} vAlign="center" paddingInline={3}>
+                <Text type="supporting" weight="medium" color="secondary">Task</Text>
+              </HStack>
+              <Divider />
+              {groups.map((group) => (
+                <VStack key={group.key}>
+                  {grouping !== "none" && (
+                    <>
+                      <Card variant="muted" padding={0} height={GROUP_HEIGHT}>
+                        <HStack height="100%" vAlign="center" gap={1.5} paddingInline={3}>
+                          {grouping === "status" && (
+                            <StatusDot variant={STATUS_DOT_VARIANT[group.key as TaskStatus]} label={`${group.label} status`} />
+                          )}
+                          <Text type="supporting" weight="semibold" color="secondary">{group.label} ({group.tasks.length})</Text>
+                        </HStack>
+                      </Card>
+                      <Divider />
+                    </>
                   )}
-                  {group.label} ({group.tasks.length})
-                </div>
-              )}
-              {group.tasks.map((task) => {
-                const mem = task.assigneeId ? memberMap.get(task.assigneeId) : null;
-                return (
-                  <div
-                    key={task.id}
-                    className="flex items-center gap-2 px-3 border-b cursor-pointer hover:bg-muted/30"
-                    style={{ height: ROW_HEIGHT }}
-                    onClick={() => onSelectTask(task.id)}
-                  >
-                    <span className="text-sm truncate flex-1">{task.title}</span>
-                    {mem && (
-                      <Avatar className="h-5 w-5 shrink-0">
-                        <AvatarImage src={mem.profile?.avatarUrl ?? undefined} />
-                        <AvatarFallback className="text-[9px]">{getInitials(mem.profile?.name)}</AvatarFallback>
-                      </Avatar>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-          {/* Unscheduled */}
-          {unscheduled.length > 0 && (
-            <Collapsible open={unscheduledOpen} onOpenChange={setUnscheduledOpen}>
-              <CollapsibleTrigger className="flex items-center gap-1.5 px-3 py-1.5 w-full text-xs font-semibold text-muted-foreground bg-muted/50 border-b hover:bg-muted/70">
-                <ChevronRight className={cn("h-3 w-3 transition-transform", unscheduledOpen && "rotate-90")} />
-                Unscheduled ({unscheduled.length})
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                {unscheduled.map((task) => {
-                  const mem = task.assigneeId ? memberMap.get(task.assigneeId) : null;
-                  return (
-                    <div
-                      key={task.id}
-                      className="flex items-center gap-2 px-3 border-b cursor-pointer hover:bg-muted/30"
-                      style={{ height: ROW_HEIGHT }}
-                      onClick={() => onSelectTask(task.id)}
-                    >
-                      <span className="text-sm truncate flex-1 text-muted-foreground">{task.title}</span>
-                      {mem && (
-                        <Avatar className="h-5 w-5 shrink-0">
-                          <AvatarImage src={mem.profile?.avatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[9px]">{getInitials(mem.profile?.name)}</AvatarFallback>
-                        </Avatar>
-                      )}
-                    </div>
-                  );
-                })}
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-        </div>
-
-        {/* Timeline grid */}
-        <div className="flex-1 overflow-auto" ref={scrollRef}>
-          <div style={{ width: totalDays * PX_PER_DAY, minHeight: "100%" }} className="relative">
-            {/* Date header */}
-            <div className="sticky top-0 z-10 bg-background border-b" style={{ height: HEADER_HEIGHT }}>
-              {/* Month row */}
-              <div className="flex h-1/2">
-                {months.map((m) => (
-                  <div
-                    key={`${m.label}-${m.startIdx}`}
-                    className="text-[10px] font-medium text-muted-foreground border-r px-1 flex items-center"
-                    style={{ width: m.span * PX_PER_DAY }}
-                  >
-                    {m.label}
-                  </div>
-                ))}
-              </div>
-              {/* Day row */}
-              <div className="flex h-1/2">
-                {days.map((d, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "text-[10px] text-center border-r flex items-center justify-center",
-                      isToday(d) ? "bg-primary/10 font-bold text-primary" : "text-muted-foreground",
-                      d.getDay() === 0 || d.getDay() === 6 ? "bg-muted/30" : ""
-                    )}
-                    style={{ width: PX_PER_DAY }}
-                  >
-                    {format(d, "d")}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Today line */}
-            {todayIdx >= 0 && todayIdx < totalDays && (
-              <div
-                ref={todayRef}
-                className="absolute top-0 bottom-0 w-px bg-red-500 z-[5] pointer-events-none"
-                style={{ left: todayIdx * PX_PER_DAY + PX_PER_DAY / 2 }}
-              />
-            )}
-
-            {/* Grid lines (weekend shading) */}
-            <div className="absolute inset-0" style={{ top: HEADER_HEIGHT }}>
-              {days.map((d, i) => (
-                (d.getDay() === 0 || d.getDay() === 6) ? (
-                  <div
-                    key={i}
-                    className="absolute top-0 bottom-0 bg-muted/20"
-                    style={{ left: i * PX_PER_DAY, width: PX_PER_DAY }}
-                  />
-                ) : null
+                  {group.tasks.map((task) => renderSidebarRow(task))}
+                </VStack>
               ))}
-            </div>
+              {unscheduled.length > 0 && (
+                <Collapsible
+                  isOpen={unscheduledOpen}
+                  onOpenChange={setUnscheduledOpen}
+                  trigger={
+                    <Card variant="muted" padding={0} height={GROUP_HEIGHT}>
+                      <HStack height="100%" vAlign="center" paddingInline={3}>
+                        <Text type="supporting" weight="semibold" color="secondary">Unscheduled ({unscheduled.length})</Text>
+                      </HStack>
+                    </Card>
+                  }
+                >
+                  {unscheduled.map((task) => renderSidebarRow(task, true))}
+                </Collapsible>
+              )}
+            </VStack>
+          </StackItem>
 
-            {/* Task bars */}
-            <TooltipProvider>
-              <div style={{ paddingTop: 0 }}>
+          <Divider orientation="vertical" />
+
+          {/* Timeline grid */}
+          <StackItem size="fill">
+            <VStack isScrollable height="100%" ref={scrollRef}>
+              {/* geometry-only: overall canvas width/height + positioning context */}
+              <VStack style={{ width: totalDays * PX_PER_DAY, minHeight: "100%", position: "relative" }}>
+                {/* Date header — sticky overlay; background token permitted on a scroll overlay */}
+                <VStack style={{ position: "sticky", top: 0, zIndex: 10, height: HEADER_HEIGHT, background: "var(--color-background-surface)" }}>
+                  <HStack style={{ height: HEADER_HEIGHT / 2 }}>
+                    {months.map((m) => (
+                      <HStack key={`${m.label}-${m.startIdx}`} style={{ width: m.span * PX_PER_DAY }} vAlign="center" paddingInline={1}>
+                        <Text type="supporting" size="2xs" weight="medium" color="secondary" maxLines={1}>{m.label}</Text>
+                      </HStack>
+                    ))}
+                  </HStack>
+                  <HStack style={{ height: HEADER_HEIGHT / 2 }}>
+                    {days.map((d, i) => {
+                      const weekend = d.getDay() === 0 || d.getDay() === 6;
+                      const today = isToday(d);
+                      return (
+                        <Card key={i} padding={0} width={PX_PER_DAY} height="100%" variant={today ? "blue" : weekend ? "muted" : "transparent"}>
+                          <HStack height="100%" vAlign="center" hAlign="center">
+                            <Text type="supporting" size="2xs" color={today ? "accent" : "secondary"} weight={today ? "bold" : "normal"}>
+                              {format(d, "d")}
+                            </Text>
+                          </HStack>
+                        </Card>
+                      );
+                    })}
+                  </HStack>
+                </VStack>
+
+                {/* Weekend shading overlay (behind bars) — token-bridge background on overlay */}
+                <VStack style={{ position: "absolute", top: HEADER_HEIGHT, left: 0, right: 0, bottom: 0, pointerEvents: "none" }}>
+                  {days.map((d, i) =>
+                    d.getDay() === 0 || d.getDay() === 6 ? (
+                      <VStack key={i} style={{ position: "absolute", top: 0, bottom: 0, left: i * PX_PER_DAY, width: PX_PER_DAY, background: "var(--color-background-muted)" }} />
+                    ) : null
+                  )}
+                </VStack>
+
+                {/* Today line */}
+                {todayIdx >= 0 && todayIdx < totalDays && (
+                  <VStack style={{ position: "absolute", top: 0, bottom: 0, left: todayIdx * PX_PER_DAY + PX_PER_DAY / 2, width: 1, background: "var(--color-border-red)", zIndex: 5, pointerEvents: "none" }} />
+                )}
+
+                {/* Task bars */}
                 {groups.map((group) => (
-                  <div key={group.key}>
+                  <VStack key={group.key}>
                     {grouping !== "none" && (
-                      <div className="border-b bg-muted/50" style={{ height: 28 }} />
+                      <>
+                        <Card variant="muted" padding={0} height={GROUP_HEIGHT} />
+                        <Divider />
+                      </>
                     )}
                     {group.tasks.map((task) => {
                       const startOffset = differenceInDays(task._start, rangeStart);
                       const barDays = Math.max(differenceInDays(task._end, task._start), 1);
-                      const left = startOffset * PX_PER_DAY;
-                      const width = barDays * PX_PER_DAY;
-
+                      const left = Math.max(startOffset * PX_PER_DAY, 0);
+                      const width = Math.max(barDays * PX_PER_DAY, PX_PER_DAY / 2);
                       return (
-                        <div key={task.id} className="relative border-b" style={{ height: ROW_HEIGHT }}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div
-                                className={cn(
-                                  "absolute top-1.5 rounded-md cursor-pointer hover:opacity-80 transition-opacity flex items-center px-1.5 overflow-hidden",
-                                  STATUS_BAR_COLORS[task.status]
-                                )}
-                                style={{
-                                  left: Math.max(left, 0),
-                                  width: Math.max(width, PX_PER_DAY / 2),
-                                  height: ROW_HEIGHT - 12,
-                                }}
+                        <Fragment key={task.id}>
+                          <VStack style={{ height: ROW_HEIGHT, position: "relative" }}>
+                            <Tooltip content={`${task.title} · ${format(task._start, "MMM d")} — ${format(task._end, "MMM d")}`}>
+                              <ClickableCard
+                                label={task.title}
+                                variant={STATUS_BAR_VARIANT[task.status]}
+                                padding={1}
                                 onClick={() => onSelectTask(task.id)}
+                                style={{ position: "absolute", top: 6, left, width, height: ROW_HEIGHT - 12 }}
                               >
-                                <span className="text-[10px] font-medium text-white truncate leading-none">{task.title}</span>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <div className="text-xs space-y-0.5">
-                                <div className="font-medium">{task.title}</div>
-                                <div>{format(task._start, "MMM d")} — {format(task._end, "MMM d")}</div>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
+                                <Text type="supporting" size="2xs" maxLines={1}>{task.title}</Text>
+                              </ClickableCard>
+                            </Tooltip>
+                          </VStack>
+                          <Divider />
+                        </Fragment>
                       );
                     })}
-                  </div>
+                  </VStack>
                 ))}
-                {/* Unscheduled spacer rows */}
                 {unscheduled.length > 0 && (
-                  <div>
-                    <div className="border-b bg-muted/50" style={{ height: 28 }} />
+                  <VStack>
+                    <Card variant="muted" padding={0} height={GROUP_HEIGHT} />
+                    <Divider />
                     {unscheduledOpen && unscheduled.map((task) => (
-                      <div key={task.id} className="relative border-b" style={{ height: ROW_HEIGHT }}>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-[10px] text-muted-foreground">No due date</span>
-                        </div>
-                      </div>
+                      <Fragment key={task.id}>
+                        <HStack style={{ height: ROW_HEIGHT }} vAlign="center" hAlign="center">
+                          <Text type="supporting" size="2xs" color="secondary">No due date</Text>
+                        </HStack>
+                        <Divider />
+                      </Fragment>
                     ))}
-                  </div>
+                  </VStack>
                 )}
-              </div>
-            </TooltipProvider>
-          </div>
-        </div>
-      </div>
-    </div>
+              </VStack>
+            </VStack>
+          </StackItem>
+        </HStack>
+      </StackItem>
+    </VStack>
   );
 }

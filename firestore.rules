@@ -105,6 +105,26 @@ service cloud.firestore {
         }
       }
 
+      // Summer camp registrations
+      // Writes happen via the submitCampRegistration Cloud Function (admin SDK,
+      // bypasses rules), so client create is closed here.
+      match /camp_registrations/{regId} {
+        allow read: if isWorkspaceMember(wsId)
+                    && getRole(wsId) in ['admin', 'manager'];
+        allow update, delete: if isWorkspaceMember(wsId)
+                              && getRole(wsId) in ['admin', 'manager'];
+        allow create: if false;
+      }
+
+      // Year-round enrollment inquiries — same model as camp_registrations
+      match /enrollments/{enrollmentId} {
+        allow read: if isWorkspaceMember(wsId)
+                    && getRole(wsId) in ['admin', 'manager'];
+        allow update, delete: if isWorkspaceMember(wsId)
+                              && getRole(wsId) in ['admin', 'manager'];
+        allow create: if false;
+      }
+
       // Invites
       match /invites/{inviteId} {
         allow read: if true;

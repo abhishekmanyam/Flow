@@ -1,14 +1,21 @@
 import { useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Paperclip, Plus, X, ExternalLink, HardDrive, Link2 } from "lucide-react";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Link } from "@astryxdesign/core/Link";
+import { Timestamp as TimestampText } from "@astryxdesign/core/Timestamp";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Paperclip, Plus, X, HardDrive, Link2 } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
 import { addAttachment, removeAttachment } from "@/lib/firestore";
-import { toast } from "sonner";
+import { toast } from "@/components/system/toast";
 import GoogleDrivePicker from "@/components/integrations/GoogleDrivePicker";
 import type { TaskAttachment } from "@/lib/types";
 
@@ -88,101 +95,78 @@ export default function TaskAttachments({
   };
 
   return (
-    <div className="py-3 space-y-3">
+    <VStack gap={3}>
       {attachments.length === 0 ? (
-        <EmptyState icon={Paperclip} title="No attachments" description="Attach files from Google Drive or paste a link" className="py-6" />
+        <EmptyState icon={<Paperclip />} title="No attachments" description="Attach files from Google Drive or paste a link" isCompact />
       ) : (
-        <div className="space-y-2">
-          {attachments.map((a) => {
-            const Icon = TYPE_ICONS[a.type] ?? Paperclip;
+        <VStack gap={0}>
+          {attachments.map((a, i) => {
+            const TypeIcon = TYPE_ICONS[a.type] ?? Paperclip;
             return (
-              <div key={a.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm group">
-                {a.iconUrl ? (
-                  <img src={a.iconUrl} alt="" className="h-4 w-4 shrink-0" />
-                ) : (
-                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                )}
-                <a
-                  href={a.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 min-w-0 truncate text-primary hover:underline"
-                >
-                  {a.name}
-                </a>
-                <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">
-                  {tsToDate(a.addedAt).toLocaleDateString()}
-                </span>
-                <a href={a.url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                </a>
-                {canEdit && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => handleRemove(a)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
+              <VStack key={a.id} gap={0}>
+                {i > 0 && <Divider />}
+                <HStack gap={2} align="center" paddingBlock={2}>
+                  <Icon icon={TypeIcon} size="sm" color="secondary" />
+                  <HStack gap={2} align="center" width="fill">
+                    <Link href={a.url} target="_blank" isExternalLink>
+                      {a.name}
+                    </Link>
+                  </HStack>
+                  <TimestampText value={tsToDate(a.addedAt).toISOString()} format="date" />
+                  {canEdit && (
+                    <IconButton label="Remove attachment" tooltip="Remove" variant="ghost" size="sm" icon={<X />} onClick={() => handleRemove(a)} />
+                  )}
+                </HStack>
+              </VStack>
             );
           })}
-        </div>
+        </VStack>
       )}
 
       {canEdit && (
-        <div className="flex flex-wrap gap-2">
+        <HStack gap={2} wrap="wrap">
           <GoogleDrivePicker onFilePicked={handleFilePicked} disabled={!canEdit} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                More
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => setLinkDialogOpen(true)}>
-                <Link2 className="mr-2 h-4 w-4" />
-                Paste a link
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+          <DropdownMenu
+            button={{ label: "More", variant: "secondary", size: "sm", icon: <Plus /> }}
+            hasChevron={false}
+            items={[{ label: "Paste a link", icon: Link2, onClick: () => setLinkDialogOpen(true) }]}
+          />
+        </HStack>
       )}
 
-      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add a link</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>URL</Label>
-              <Input
-                placeholder="https://..."
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLinkSubmit()}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Display name (optional)</Label>
-              <Input
-                placeholder="e.g. Design spec"
-                value={linkName}
-                onChange={(e) => setLinkName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLinkSubmit()}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleLinkSubmit} disabled={!linkUrl.trim()}>Add link</Button>
-          </DialogFooter>
-        </DialogContent>
+      <Dialog isOpen={linkDialogOpen} onOpenChange={setLinkDialogOpen} purpose="form" width={440}>
+        <Layout
+          header={<DialogHeader title="Add a link" onOpenChange={() => setLinkDialogOpen(false)} />}
+          content={
+            <LayoutContent>
+              <VStack gap={4}>
+                <TextInput
+                  label="URL"
+                  placeholder="https://..."
+                  value={linkUrl}
+                  onChange={setLinkUrl}
+                  hasAutoFocus
+                />
+                <TextInput
+                  label="Display name"
+                  isOptional
+                  placeholder="e.g. Design spec"
+                  value={linkName}
+                  onChange={setLinkName}
+                />
+              </VStack>
+            </LayoutContent>
+          }
+          footer={
+            <LayoutFooter>
+              <HStack gap={2} hAlign="end">
+                <Button label="Cancel" variant="secondary" onClick={() => setLinkDialogOpen(false)} />
+                <Button label="Add link" variant="primary" isDisabled={!linkUrl.trim()} onClick={handleLinkSubmit} />
+              </HStack>
+            </LayoutFooter>
+          }
+        />
       </Dialog>
-    </div>
+    </VStack>
   );
 }

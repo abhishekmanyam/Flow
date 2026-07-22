@@ -1,9 +1,13 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
-import { motion } from "motion/react";
 import { useAuthStore } from "@/store/auth";
-import { Button } from "@/components/ui/button";
-import { BackgroundBeams } from "@/components/ui/background-beams";
+import { AppShell } from "@astryxdesign/core/AppShell";
+import { Center } from "@astryxdesign/core/Center";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { Button } from "@astryxdesign/core/Button";
 
 // bundle-dynamic-imports: lazy-load heavy route chunks
 const LoginPage = lazy(() => import("@/pages/auth/LoginPage"));
@@ -25,21 +29,15 @@ const SharedNotesPage = lazy(() => import("@/pages/projects/SharedNotesPage"));
 const WhiteboardPage = lazy(() => import("@/pages/projects/WhiteboardPage"));
 const TimesheetPage = lazy(() => import("@/pages/workspace/TimesheetPage"));
 const CalendarPage = lazy(() => import("@/pages/workspace/CalendarPage"));
+const InquiriesPage = lazy(() => import("@/pages/workspace/InquiriesPage"));
 const PublicCalendarPage = lazy(() => import("@/pages/public/PublicCalendarPage"));
 const PublicEventPage = lazy(() => import("@/pages/public/PublicEventPage"));
 
 function PageLoader() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-      <motion.div
-        animate={{ scale: [1, 1.15, 1], opacity: [0.7, 1, 0.7] }}
-        transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-        className="flex items-center justify-center"
-      >
-        <img src="/flowtask.png" alt="FlowTask" className="h-10" />
-      </motion.div>
-      <p className="text-xs text-muted-foreground">Loading...</p>
-    </div>
+    <Center axis="both" height="100vh">
+      <Spinner size="lg" label="Loading..." />
+    </Center>
   );
 }
 
@@ -62,28 +60,20 @@ function RequireNoAuth({ children }: { children: React.ReactNode }) {
 function NoWorkspacePage() {
   const { signOut } = useAuthStore();
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 relative overflow-hidden">
-      <BackgroundBeams className="z-0" />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4, ease: "easeOut" }}
-        className="w-full max-w-sm space-y-6 text-center relative z-10"
-      >
-        <div className="flex items-center justify-center mb-6">
-          <img src="/flowtask.png" alt="FlowTask" className="h-12" />
-        </div>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold">No workspace access</h1>
-          <p className="text-sm text-muted-foreground">
-            You don&apos;t belong to any workspace yet. Ask your admin to send you an invite link.
-          </p>
-        </div>
-        <Button variant="outline" className="w-full" onClick={() => signOut()}>
-          Sign out
-        </Button>
-      </motion.div>
-    </div>
+    <AppShell contentPadding={4}>
+      <Center axis="both" height="100%">
+        <VStack gap={4} hAlign="center" width="100%" maxWidth={400}>
+          <img src="/flowtask.png" alt="FlowTask" width={48} />
+          <VStack gap={2} hAlign="center">
+            <Heading level={1}>No workspace access</Heading>
+            <Text type="supporting" color="secondary" justify="center">
+              You don&apos;t belong to any workspace yet. Ask your admin to send you an invite link.
+            </Text>
+          </VStack>
+          <Button label="Sign out" variant="secondary" width="100%" clickAction={() => signOut()} />
+        </VStack>
+      </Center>
+    </AppShell>
   );
 }
 
@@ -106,6 +96,8 @@ export default function App() {
           <Route path="members" element={<MembersPage />} />
           <Route path="timesheet" element={<TimesheetPage />} />
           <Route path="calendar" element={<CalendarPage />} />
+          <Route path="inquiries" element={<InquiriesPage />} />
+          <Route path="registrations" element={<Navigate to="../inquiries" replace />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="projects/:projectId/board" element={<BoardPage />} />
           <Route path="projects/:projectId/backlog" element={<BacklogPage />} />

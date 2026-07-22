@@ -18,76 +18,52 @@ import {
 } from "date-fns";
 import {
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
   Plus,
   Clock,
-  Search,
-  Filter,
-  List,
-  Settings,
-  X,
   MapPin,
-  Check,
   Download,
-  Link2,
+  List as ListIcon,
+  Settings,
 } from "lucide-react";
 import type { CalendarEvent, EventCategory } from "@/lib/types";
-import {
-  EVENT_CATEGORY_LABELS,
-  EVENT_CATEGORY_COLORS,
-} from "@/lib/types";
+import { EVENT_CATEGORY_LABELS } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 import { subscribeToCalendarEvents } from "@/lib/firestore";
-import { MotionPage } from "@/components/ui/motion-page";
-import { toast } from "sonner";
-import FullCalendarView from "@/components/calendar/FullCalendarView";
+import { toast } from "@/components/system/toast";
 import { downloadICS } from "@/lib/ics";
+import FullCalendarView from "@/components/calendar/FullCalendarView";
 import CreateEventDialog from "@/components/calendar/CreateEventDialog";
 import EventDetailSheet from "@/components/calendar/EventDetailSheet";
 import EventCategoryBadge from "@/components/calendar/EventCategoryBadge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { Layout, LayoutHeader, LayoutContent } from "@astryxdesign/core/Layout";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Banner } from "@astryxdesign/core/Banner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { Center } from "@astryxdesign/core/Center";
+import { SegmentedControl } from "@astryxdesign/core/SegmentedControl";
+import { SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { Selector } from "@astryxdesign/core/Selector";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { CheckboxList, CheckboxListItem } from "@astryxdesign/core/CheckboxList";
+import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { List, ListItem } from "@astryxdesign/core/List";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function toDate(val: unknown): Date {
   if (!val) return new Date();
   if (val instanceof Date) return val;
-  if (
-    typeof val === "object" &&
-    "toDate" in (val as Record<string, unknown>)
-  )
+  if (typeof val === "object" && "toDate" in (val as Record<string, unknown>))
     return (val as { toDate: () => Date }).toDate();
   return new Date(val as string);
 }
@@ -99,9 +75,7 @@ function expandRecurringEvents(
 ): CalendarEvent[] {
   const result: CalendarEvent[] = [];
   for (const event of events) {
-    const excluded = (event.excludedDates ?? []).map((d) =>
-      toDate(d).getTime()
-    );
+    const excluded = (event.excludedDates ?? []).map((d) => toDate(d).getTime());
     const eventStart = toDate(event.startDate);
     // Skip the original occurrence if it's excluded
     if (!excluded.includes(startOfDay(eventStart).getTime())) {
@@ -123,10 +97,7 @@ function expandRecurringEvents(
     let count = 0;
     while (isBefore(occurrence, rangeEnd) && count < 90) {
       if (repeatUntil && isAfter(occurrence, repeatUntil)) break;
-      if (
-        isAfter(occurrence, rangeStart) ||
-        isSameDay(occurrence, rangeStart)
-      ) {
+      if (isAfter(occurrence, rangeStart) || isSameDay(occurrence, rangeStart)) {
         if (!excluded.includes(startOfDay(occurrence).getTime())) {
           const occStart = occurrence;
           const occEnd = new Date(occStart.getTime() + duration);
@@ -162,11 +133,11 @@ const VIEW_LABELS: { key: ViewMode; label: string }[] = [
   { key: "year", label: "Year" },
 ];
 
-const SCOPE_LABELS: Record<EventScope, string> = {
-  all: "All Events",
-  mine: "My Events",
-  public: "Public Events",
-};
+const SCOPE_OPTIONS: { value: EventScope; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "mine", label: "Mine" },
+  { value: "public", label: "Public" },
+];
 
 const ALL_CATEGORIES: EventCategory[] = [
   "meeting",
@@ -178,6 +149,20 @@ const ALL_CATEGORIES: EventCategory[] = [
 
 const DAYS_OPTIONS = [3, 5, 7] as const;
 
+// Friendly names for the fixed brand palette used by events.
+const COLOR_LABELS: Record<string, string> = {
+  "#6366f1": "Indigo",
+  "#8b5cf6": "Violet",
+  "#ec4899": "Pink",
+  "#f97316": "Orange",
+  "#eab308": "Yellow",
+  "#22c55e": "Green",
+  "#14b8a6": "Teal",
+  "#3b82f6": "Blue",
+  "#ef4444": "Red",
+  "#a855f7": "Purple",
+};
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function CalendarPage() {
@@ -185,6 +170,8 @@ export default function CalendarPage() {
 
   // ── Events ──
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
 
   // ── Navigation ──
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
@@ -194,9 +181,9 @@ export default function CalendarPage() {
 
   // ── Filters ──
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategories, setSelectedCategories] = useState<
-    EventCategory[]
-  >([]);
+  const [selectedCategories, setSelectedCategories] = useState<EventCategory[]>(
+    []
+  );
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [eventScope, setEventScope] = useState<EventScope>("all");
 
@@ -206,31 +193,40 @@ export default function CalendarPage() {
 
   // ── Settings ──
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(0);
 
   // ── Dialogs ──
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [createDefaultDate, setCreateDefaultDate] = useState<
-    Date | undefined
-  >(undefined);
-  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
-    null
+  const [createDefaultDate, setCreateDefaultDate] = useState<Date | undefined>(
+    undefined
   );
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
   const canCreate = role === "admin" || role === "manager" || role === "member";
   const canManageAnyEvent = role === "admin" || role === "manager";
   const canDelete = role === "admin" || role === "manager";
   const canViewRegistrations = role === "admin" || role === "manager";
-  const canEditSelectedEvent = !!selectedEvent && (
-    canManageAnyEvent ||
-    (role === "member" && selectedEvent.createdBy === user?.uid)
-  );
+  const canEditSelectedEvent =
+    !!selectedEvent &&
+    (canManageAnyEvent ||
+      (role === "member" && selectedEvent.createdBy === user?.uid));
 
   // ── Data subscription ──
   useEffect(() => {
     if (!workspace) return;
-    return subscribeToCalendarEvents(workspace.id, setEvents);
+    setEventsLoaded(false);
+    setSubError(null);
+    try {
+      return subscribeToCalendarEvents(workspace.id, (data) => {
+        setEvents(data);
+        setEventsLoaded(true);
+      });
+    } catch {
+      setSubError("Failed to load calendar events");
+      setEventsLoaded(true);
+    }
   }, [workspace?.id]);
 
   // ── Expanded events (recurring) ──
@@ -265,10 +261,7 @@ export default function CalendarPage() {
       ) {
         return false;
       }
-      if (
-        selectedColors.length > 0 &&
-        !selectedColors.includes(event.color)
-      ) {
+      if (selectedColors.length > 0 && !selectedColors.includes(event.color)) {
         return false;
       }
       if (eventScope === "mine" && event.createdBy !== user?.uid) {
@@ -307,8 +300,7 @@ export default function CalendarPage() {
         );
       })
       .sort(
-        (a, b) =>
-          toDate(a.startDate).getTime() - toDate(b.startDate).getTime()
+        (a, b) => toDate(a.startDate).getTime() - toDate(b.startDate).getTime()
       );
   }, [filteredEvents, currentMonth]);
 
@@ -344,8 +336,7 @@ export default function CalendarPage() {
         break;
       case "year":
         setCurrentMonth(
-          (prev) =>
-            new Date(prev.getFullYear() - 1, prev.getMonth(), 1)
+          (prev) => new Date(prev.getFullYear() - 1, prev.getMonth(), 1)
         );
         break;
     }
@@ -367,8 +358,7 @@ export default function CalendarPage() {
         break;
       case "year":
         setCurrentMonth(
-          (prev) =>
-            new Date(prev.getFullYear() + 1, prev.getMonth(), 1)
+          (prev) => new Date(prev.getFullYear() + 1, prev.getMonth(), 1)
         );
         break;
     }
@@ -412,558 +402,416 @@ export default function CalendarPage() {
     setDetailSheetOpen(true);
   };
 
-  // ── Category toggle ──
-  const toggleCategory = (cat: EventCategory) => {
-    setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setSelectedCategories([]);
+    setSelectedColors([]);
+    setEventScope("all");
   };
 
-  // ── Color toggle ──
-  const toggleColor = (color: string) => {
-    setSelectedColors((prev) =>
-      prev.includes(color)
-        ? prev.filter((c) => c !== color)
-        : [...prev, color]
-    );
-  };
+  // ── ICS subscribe URL ──
+  const authDomain = (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string) ?? "";
+  const projectId =
+    authDomain.replace(".firebaseapp.com", "") ||
+    import.meta.env.VITE_FIREBASE_PROJECT_ID;
+  const icsUrl = projectId
+    ? `https://us-central1-${projectId}.cloudfunctions.net/getCalendarICS?workspaceId=${workspace?.id ?? ""}`
+    : "";
+  const webcalUrl = icsUrl.replace(/^https?:\/\//, "webcal://");
+  const googleSubUrl = icsUrl
+    ? `https://www.google.com/calendar/render?cid=${encodeURIComponent(webcalUrl)}`
+    : "";
 
-  // ── Render event row (for list / day views) ──
-  const renderEventRow = (event: CalendarEvent) => (
-    <button
-      key={event.id}
-      type="button"
-      className="w-full text-left flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors group"
-      onClick={() => openEventDetail(event)}
-    >
-      <div
-        className="w-1 self-stretch rounded-full shrink-0"
-        style={{ backgroundColor: event.color }}
+  // ── Content region ──
+  const content = (() => {
+    if (subError) {
+      return <Banner status="error" title={subError} />;
+    }
+    if (!eventsLoaded) {
+      return (
+        <Center height={240}>
+          <Spinner label="Loading calendar" />
+        </Center>
+      );
+    }
+    if (showListView) {
+      if (listGrouped.length === 0) {
+        return (
+          <EmptyState
+            icon={<CalendarDays size={28} />}
+            title="No events found"
+            description={
+              activeFilterCount > 0
+                ? "No events match the current filters."
+                : "There are no events this month yet."
+            }
+          />
+        );
+      }
+      return (
+        <VStack gap={4}>
+          {listGrouped.map((group) => (
+            <VStack key={group.date.toISOString()} gap={1}>
+              <Text type="label" color="secondary" weight="semibold">
+                {format(group.date, "EEEE, MMMM d, yyyy")} · {group.events.length}{" "}
+                event{group.events.length !== 1 ? "s" : ""}
+              </Text>
+              <List hasDividers>
+                {group.events.map((event) => (
+                  <ListItem
+                    key={event.id}
+                    label={event.title}
+                    startContent={<Icon icon="calendar" size="sm" />}
+                    description={
+                      <HStack gap={3} align="center">
+                        <HStack gap={1} align="center">
+                          <Clock size={12} />
+                          <Text type="supporting" color="secondary">
+                            {formatEventTime(event)}
+                          </Text>
+                        </HStack>
+                        {event.location && (
+                          <HStack gap={1} align="center">
+                            <MapPin size={12} />
+                            <Text type="supporting" color="secondary" maxLines={1}>
+                              {event.location}
+                            </Text>
+                          </HStack>
+                        )}
+                      </HStack>
+                    }
+                    endContent={<EventCategoryBadge category={event.category} />}
+                    onClick={() => openEventDetail(event)}
+                  />
+                ))}
+              </List>
+            </VStack>
+          ))}
+        </VStack>
+      );
+    }
+    return (
+      <FullCalendarView
+        events={filteredEvents}
+        viewMode={viewMode}
+        daysCount={daysCount}
+        currentDate={
+          viewMode === "month" || viewMode === "year"
+            ? currentMonth
+            : selectedDate
+        }
+        weekStartsOn={weekStartsOn}
+        use24h={use24h}
+        onEventClick={openEventDetail}
+        onDateClick={(date) => {
+          setSelectedDate(date);
+          setCreateDefaultDate(date);
+        }}
       />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-          {event.title}
-        </p>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {formatEventTime(event)}
-          </span>
-          {event.location && (
-            <span className="flex items-center gap-1 truncate">
-              <MapPin className="h-3 w-3 shrink-0" />
-              {event.location}
-            </span>
-          )}
-        </div>
-      </div>
-      <EventCategoryBadge category={event.category} />
-    </button>
-  );
+    );
+  })();
 
   return (
-    <MotionPage className="p-3 sm:p-4 space-y-3">
-      {/* ── Header row ── */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="flex items-center gap-1 shrink-0">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={navigatePrev}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={navigateNext}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <h2 className="text-base sm:text-lg font-semibold tracking-tight truncate">
-            {headerLabel}
-          </h2>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={goToToday}>
-            Today
-          </Button>
-          {canCreate && (
-            <Button
-              size="sm"
-              onClick={() => {
-                setCreateDefaultDate(
-                  viewMode === "day" ? selectedDate : undefined
-                );
-                setCreateDialogOpen(true);
-              }}
-            >
-              <Plus className="sm:mr-1.5 h-4 w-4" />
-              <span className="hidden sm:inline">Event</span>
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Toolbar row ── */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1 rounded-lg border p-1">
-          {VIEW_LABELS.map(({ key, label }) =>
-            key === "days" ? (
-              <DropdownMenu key={key}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant={viewMode === "days" ? "secondary" : "ghost"}
+    <Layout
+      header={
+        <LayoutHeader hasDivider>
+          <VStack paddingInline={4} paddingBlock={3} gap={3}>
+            {/* Row 1: navigation + primary actions */}
+            <HStack justify="between" align="center" gap={2}>
+              <HStack gap={2} align="center">
+                <HStack gap={1} align="center">
+                  <IconButton
+                    label="Previous period"
+                    variant="secondary"
                     size="sm"
-                    className="h-7 text-xs px-2.5"
-                  >
-                    {daysCount}D
-                    <ChevronDown className="ml-1 h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {DAYS_OPTIONS.map((n) => (
-                    <DropdownMenuItem
-                      key={n}
-                      onClick={() => {
-                        setDaysCount(n);
-                        setViewMode("days");
-                      }}
-                    >
-                      {n} days
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <Button
-                key={key}
-                variant={viewMode === key ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode(key)}
-                className="h-7 text-xs px-2.5"
-              >
-                {label}
-              </Button>
-            )
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          {/* Search */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={searchQuery ? "secondary" : "ghost"}
-                size="icon"
-                className="h-8 w-8"
-              >
-                <Search className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-3" align="end">
-              <div className="space-y-2">
-                <Label className="text-xs font-medium">
-                  Search events
-                </Label>
-                <Input
-                  placeholder="Title, description, location..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                />
-                {searchQuery && (
-                  <Button
-                    variant="ghost"
+                    icon={<Icon icon="chevronLeft" size="sm" />}
+                    onClick={navigatePrev}
+                  />
+                  <IconButton
+                    label="Next period"
+                    variant="secondary"
                     size="sm"
-                    className="w-full"
-                    onClick={() => setSearchQuery("")}
-                  >
-                    Clear
-                  </Button>
+                    icon={<Icon icon="chevronRight" size="sm" />}
+                    onClick={navigateNext}
+                  />
+                </HStack>
+                <Heading level={1} maxLines={1}>
+                  {headerLabel}
+                </Heading>
+              </HStack>
+              <HStack gap={2} align="center">
+                <Button label="Today" variant="secondary" size="sm" onClick={goToToday} />
+                {canCreate && (
+                  <Button
+                    label="New event"
+                    variant="primary"
+                    size="sm"
+                    icon={<Plus size={16} />}
+                    onClick={() => {
+                      setCreateDefaultDate(
+                        viewMode === "day" ? selectedDate : undefined
+                      );
+                      setCreateDialogOpen(true);
+                    }}
+                  />
                 )}
-              </div>
-            </PopoverContent>
-          </Popover>
+              </HStack>
+            </HStack>
 
-          {/* Filters */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={activeFilterCount > 0 ? "secondary" : "ghost"}
-                size="icon"
-                className="h-8 w-8 relative"
-              >
-                <Filter className="h-4 w-4" />
-                {activeFilterCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-0" align="end">
-              <div className="p-3 space-y-4">
-                {/* Scope */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium">Show</Label>
-                  <div className="flex gap-1">
-                    {(Object.keys(SCOPE_LABELS) as EventScope[]).map(
-                      (scope) => (
-                        <Button
-                          key={scope}
-                          variant={
-                            eventScope === scope ? "secondary" : "outline"
-                          }
-                          size="sm"
-                          className="h-7 text-xs flex-1"
-                          onClick={() => setEventScope(scope)}
-                        >
-                          {SCOPE_LABELS[scope].replace(" Events", "")}
-                        </Button>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Categories */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium">Categories</Label>
-                  <div className="space-y-1.5">
-                    {ALL_CATEGORIES.map((cat) => (
-                      <div key={cat} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`cat-${cat}`}
-                          checked={selectedCategories.includes(cat)}
-                          onCheckedChange={() => toggleCategory(cat)}
-                        />
-                        <label
-                          htmlFor={`cat-${cat}`}
-                          className="flex items-center gap-2 text-sm cursor-pointer flex-1"
-                        >
-                          <span
-                            className="h-2 w-2 rounded-full shrink-0"
-                            style={{
-                              backgroundColor: EVENT_CATEGORY_COLORS[cat],
-                            }}
-                          />
-                          {EVENT_CATEGORY_LABELS[cat]}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Colors */}
-                {eventColors.length > 0 && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium">Colors</Label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {eventColors.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            className={cn(
-                              "h-6 w-6 rounded-full transition-all flex items-center justify-center",
-                              selectedColors.includes(color)
-                                ? "ring-2 ring-offset-2 ring-primary"
-                                : "hover:ring-1 hover:ring-offset-1 hover:ring-muted-foreground"
-                            )}
-                            style={{ backgroundColor: color }}
-                            onClick={() => toggleColor(color)}
-                          >
-                            {selectedColors.includes(color) && (
-                              <Check className="h-3 w-3 text-white" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* Clear */}
-                {activeFilterCount > 0 && (
-                  <>
-                    <Separator />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => {
-                        setSearchQuery("");
-                        setSelectedCategories([]);
-                        setSelectedColors([]);
-                        setEventScope("all");
-                      }}
-                    >
-                      <X className="mr-1.5 h-3 w-3" />
-                      Clear all filters
-                    </Button>
-                  </>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <Separator orientation="vertical" className="h-5 mx-0.5" />
-
-          {/* Calendar / List toggle */}
-          <div className="flex items-center rounded-md border p-0.5">
-            <Button
-              variant={!showListView ? "secondary" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setShowListView(false)}
-            >
-              <CalendarDays className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant={showListView ? "secondary" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setShowListView(true)}
-            >
-              <List className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-
-          {/* Settings */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Content area ── */}
-      {showListView ? (
-        // ── List View ──
-        <div className="rounded-lg border">
-          {listGrouped.length === 0 ? (
-            <div className="p-8 text-center">
-              <CalendarDays className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No events found
-                {activeFilterCount > 0 && " for current filters"}
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y">
-              {listGrouped.map((group) => (
-                <div key={group.date.toISOString()}>
-                  <div className="px-4 py-2 bg-muted/50">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      {format(group.date, "EEEE, MMMM d, yyyy")}
-                      <span className="ml-2 text-[10px] font-normal normal-case">
-                        ({group.events.length} event
-                        {group.events.length !== 1 ? "s" : ""})
-                      </span>
-                    </p>
-                  </div>
-                  <div className="divide-y">
-                    {group.events.map(renderEventRow)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        // ── Calendar View (FullCalendar) ──
-        <FullCalendarView
-          events={filteredEvents}
-          viewMode={viewMode}
-          daysCount={daysCount}
-          currentDate={viewMode === "month" || viewMode === "year" ? currentMonth : selectedDate}
-          weekStartsOn={weekStartsOn}
-          use24h={use24h}
-          onEventClick={openEventDetail}
-          onDateClick={(date) => {
-            setSelectedDate(date);
-            setCreateDefaultDate(date);
-          }}
-        />
-      )}
-
-      {/* ── Calendar Settings Sheet ── */}
-      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <SheetContent side="right" className="sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>Calendar Settings</SheetTitle>
-            <SheetDescription>
-              Customize your calendar preferences
-            </SheetDescription>
-          </SheetHeader>
-          <div className="space-y-6 px-4 pt-6">
-            <div className="space-y-2">
-              <Label>Week starts on</Label>
-              <Select
-                value={String(weekStartsOn)}
-                onValueChange={(val) =>
-                  setWeekStartsOn(Number(val) as 0 | 1)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Sunday</SelectItem>
-                  <SelectItem value="1">Monday</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Default view</Label>
-              <Select
-                value={viewMode}
-                onValueChange={(val) => setViewMode(val as ViewMode)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
+            {/* Row 2: view switcher + tools */}
+            <HStack justify="between" align="center" gap={2}>
+              <HStack gap={2} align="center">
+                <SegmentedControl
+                  label="Calendar view"
+                  size="sm"
+                  value={viewMode}
+                  onChange={(v) => setViewMode(v as ViewMode)}
+                >
                   {VIEW_LABELS.map(({ key, label }) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
-                    </SelectItem>
+                    <SegmentedControlItem key={key} value={key} label={label} />
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
+                </SegmentedControl>
+                {viewMode === "days" && (
+                  <DropdownMenu
+                    button={{ label: `${daysCount} days`, variant: "secondary", size: "sm" }}
+                    items={DAYS_OPTIONS.map((n) => ({
+                      label: `${n} days`,
+                      onClick: () => setDaysCount(n),
+                    }))}
+                  />
+                )}
+              </HStack>
 
-            <div className="space-y-2">
-              <Label>Time format</Label>
-              <Select
-                value={use24h ? "24h" : "12h"}
-                onValueChange={(val) => setUse24h(val === "24h")}
+              <HStack gap={2} align="center">
+                <HStack width={220}>
+                  <TextInput
+                    label="Search events"
+                    isLabelHidden
+                    size="sm"
+                    startIcon="search"
+                    hasClear
+                    placeholder="Search events..."
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                  />
+                </HStack>
+                <Button
+                  label="Filter"
+                  variant="secondary"
+                  size="sm"
+                  icon={<Icon icon="funnel" size="sm" />}
+                  endContent={
+                    activeFilterCount > 0 ? (
+                      <Badge label={String(activeFilterCount)} />
+                    ) : undefined
+                  }
+                  onClick={() => setFilterOpen(true)}
+                />
+                <SegmentedControl
+                  label="Display mode"
+                  size="sm"
+                  value={showListView ? "list" : "calendar"}
+                  onChange={(v) => setShowListView(v === "list")}
+                >
+                  <SegmentedControlItem
+                    value="calendar"
+                    label="Calendar"
+                    isLabelHidden
+                    icon={<CalendarDays size={16} />}
+                  />
+                  <SegmentedControlItem
+                    value="list"
+                    label="List"
+                    isLabelHidden
+                    icon={<ListIcon size={16} />}
+                  />
+                </SegmentedControl>
+                <IconButton
+                  label="Calendar settings"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Settings size={18} />}
+                  onClick={() => setSettingsOpen(true)}
+                />
+              </HStack>
+            </HStack>
+          </VStack>
+        </LayoutHeader>
+      }
+    >
+      <LayoutContent padding={4}>{content}</LayoutContent>
+
+      {/* ── Filter dialog ── */}
+      <Dialog isOpen={filterOpen} onOpenChange={setFilterOpen} width={360}>
+        <DialogHeader title="Filters" onOpenChange={setFilterOpen} />
+        <VStack padding={4} gap={4}>
+          <SegmentedControl
+            label="Show events"
+            layout="fill"
+            value={eventScope}
+            onChange={(v) => setEventScope(v as EventScope)}
+          >
+            {SCOPE_OPTIONS.map(({ value, label }) => (
+              <SegmentedControlItem key={value} value={value} label={label} />
+            ))}
+          </SegmentedControl>
+
+          <Divider />
+
+          <CheckboxList
+            label="Categories"
+            value={selectedCategories}
+            onChange={(values) => setSelectedCategories(values as EventCategory[])}
+          >
+            {ALL_CATEGORIES.map((cat) => (
+              <CheckboxListItem
+                key={cat}
+                value={cat}
+                label={EVENT_CATEGORY_LABELS[cat]}
+              />
+            ))}
+          </CheckboxList>
+
+          {eventColors.length > 0 && (
+            <>
+              <Divider />
+              <CheckboxList
+                label="Colors"
+                value={selectedColors}
+                onChange={setSelectedColors}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="12h">12-hour (AM/PM)</SelectItem>
-                  <SelectItem value="24h">24-hour</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                {eventColors.map((color) => (
+                  <CheckboxListItem
+                    key={color}
+                    value={color}
+                    label={COLOR_LABELS[color] ?? color}
+                  />
+                ))}
+              </CheckboxList>
+            </>
+          )}
 
-            <Separator />
-
-            <div className="space-y-2">
-              <Label>Multi-day view count</Label>
-              <Select
-                value={String(daysCount)}
-                onValueChange={(val) => setDaysCount(Number(val))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS_OPTIONS.map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n} days
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Separator />
-
-            {/* ── Calendar Export ── */}
-            <div className="space-y-3">
-              <Label>Calendar export</Label>
+          {activeFilterCount > 0 && (
+            <>
+              <Divider />
               <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => {
-                  downloadICS(events, (workspace?.name ?? "Calendar") + " Calendar");
-                  toast.success("Calendar downloaded");
-                }}
-              >
-                <Download className="h-4 w-4" />
-                Download .ics file
-              </Button>
+                label="Clear all filters"
+                variant="ghost"
+                icon={<Icon icon="close" size="sm" />}
+                onClick={clearAllFilters}
+              />
+            </>
+          )}
+        </VStack>
+      </Dialog>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">
-                  Subscribe URL (for Google Calendar / Outlook)
-                </Label>
-                {(() => {
-                  const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string ?? "";
-                  const projectId = authDomain.replace(".firebaseapp.com", "") || import.meta.env.VITE_FIREBASE_PROJECT_ID;
-                  const icsUrl = projectId
-                    ? `https://us-central1-${projectId}.cloudfunctions.net/getCalendarICS?workspaceId=${workspace?.id ?? ""}`
-                    : "";
-                  const webcalUrl = icsUrl.replace(/^https?:\/\//, "webcal://");
-                  const googleSubUrl = icsUrl
-                    ? `https://www.google.com/calendar/render?cid=${encodeURIComponent(webcalUrl)}`
-                    : "";
-                  return (
-                    <>
-                      {icsUrl && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            className="flex-1 gap-2 text-xs"
-                            onClick={() => window.open(googleSubUrl, "_blank")}
-                          >
-                            <CalendarDays className="h-4 w-4" />
-                            Add to Google Calendar
-                          </Button>
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <Input
-                          readOnly
-                          value={icsUrl}
-                          className="text-xs"
-                          placeholder="Deploy Cloud Function first"
-                        />
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="shrink-0"
-                          disabled={!icsUrl}
-                          onClick={() => {
-                            navigator.clipboard.writeText(icsUrl);
-                            toast.success("Link copied");
-                          }}
-                        >
-                          <Link2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        {icsUrl
-                          ? "Or paste the URL above in Outlook (Add calendar → Subscribe from web)."
-                          : "Set VITE_FIREBASE_PROJECT_ID and deploy the Cloud Function first."}
-                      </p>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* ── Settings dialog ── */}
+      <Dialog isOpen={settingsOpen} onOpenChange={setSettingsOpen} width={440}>
+        <DialogHeader
+          title="Calendar settings"
+          subtitle="Customize your calendar preferences"
+          onOpenChange={setSettingsOpen}
+        />
+        <VStack padding={4} gap={4} isScrollable>
+          <Selector
+            label="Week starts on"
+            value={String(weekStartsOn)}
+            onChange={(v) => setWeekStartsOn(Number(v) as 0 | 1)}
+            options={[
+              { value: "0", label: "Sunday" },
+              { value: "1", label: "Monday" },
+            ]}
+          />
+          <Selector
+            label="Default view"
+            value={viewMode}
+            onChange={(v) => setViewMode(v as ViewMode)}
+            options={VIEW_LABELS.map(({ key, label }) => ({
+              value: key,
+              label,
+            }))}
+          />
+          <Selector
+            label="Time format"
+            value={use24h ? "24h" : "12h"}
+            onChange={(v) => setUse24h(v === "24h")}
+            options={[
+              { value: "12h", label: "12-hour (AM/PM)" },
+              { value: "24h", label: "24-hour" },
+            ]}
+          />
+          <Selector
+            label="Multi-day view count"
+            value={String(daysCount)}
+            onChange={(v) => setDaysCount(Number(v))}
+            options={DAYS_OPTIONS.map((n) => ({
+              value: String(n),
+              label: `${n} days`,
+            }))}
+          />
 
-      {/* ── Event Dialogs ── */}
+          <Divider />
+
+          <VStack gap={3}>
+            <Text type="label" weight="semibold">
+              Calendar export
+            </Text>
+            <Button
+              label="Download .ics file"
+              variant="secondary"
+              width="100%"
+              icon={<Download size={16} />}
+              onClick={() => {
+                downloadICS(
+                  events,
+                  (workspace?.name ?? "Calendar") + " Calendar"
+                );
+                toast.success("Calendar downloaded");
+              }}
+            />
+
+            <Text type="supporting" color="secondary">
+              Subscribe URL (for Google Calendar / Outlook)
+            </Text>
+            {icsUrl ? (
+              <VStack gap={2}>
+                <Button
+                  label="Add to Google Calendar"
+                  variant="secondary"
+                  width="100%"
+                  icon={<CalendarDays size={16} />}
+                  onClick={() => window.open(googleSubUrl, "_blank")}
+                />
+                <HStack gap={2} align="center">
+                  <Text type="code" maxLines={1}>
+                    {icsUrl}
+                  </Text>
+                  <IconButton
+                    label="Copy subscribe link"
+                    variant="secondary"
+                    size="sm"
+                    icon={<Icon icon="copy" size="sm" />}
+                    onClick={() => {
+                      navigator.clipboard.writeText(icsUrl);
+                      toast.success("Link copied");
+                    }}
+                  />
+                </HStack>
+                <Text type="supporting" color="secondary">
+                  Or paste the URL above in Outlook (Add calendar → Subscribe
+                  from web).
+                </Text>
+              </VStack>
+            ) : (
+              <Text type="supporting" color="secondary">
+                Set VITE_FIREBASE_PROJECT_ID and deploy the Cloud Function first.
+              </Text>
+            )}
+          </VStack>
+        </VStack>
+      </Dialog>
+
+      {/* ── Event dialogs ── */}
       {createDialogOpen && (
         <CreateEventDialog
           open
@@ -987,6 +835,6 @@ export default function CalendarPage() {
           canViewRegistrations={canViewRegistrations}
         />
       )}
-    </MotionPage>
+    </Layout>
   );
 }

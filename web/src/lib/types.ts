@@ -423,6 +423,60 @@ export type EventRegistration = {
   registeredAt: Timestamp;
 };
 
+export type CampRegistrationStatus =
+  | "new"
+  | "contacted"
+  | "confirmed"
+  | "cancelled";
+
+export type CampRegistration = {
+  id: string;
+  childName: string;
+  childAge: number;
+  parentName: string;
+  parentEmail: string;
+  parentPhone: string;
+  sessionMonth: "June" | "July" | "August";
+  sessionDates: string;
+  notes?: string;
+  status: CampRegistrationStatus;
+  source: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
+};
+
+export const CAMP_REG_STATUS_LABELS: Record<CampRegistrationStatus, string> = {
+  new: "New",
+  contacted: "Contacted",
+  confirmed: "Confirmed",
+  cancelled: "Cancelled",
+};
+
+export type EnrollmentPlan = "explorer" | "innovator" | "visionary";
+
+export type EnrollmentStatus = CampRegistrationStatus;
+
+export type Enrollment = {
+  id: string;
+  childName: string;
+  childAge: number;
+  parentName: string;
+  parentEmail: string;
+  parentPhone: string;
+  plan: EnrollmentPlan;
+  notes?: string;
+  status: EnrollmentStatus;
+  source: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
+};
+
+export const ENROLLMENT_PLAN_LABELS: Record<EnrollmentPlan, string> = {
+  explorer: "Explorer",
+  innovator: "Innovator",
+  visionary: "Visionary",
+};
+
 export const EVENT_CATEGORY_LABELS: Record<EventCategory, string> = {
   meeting: "Meeting",
   workshop: "Workshop",

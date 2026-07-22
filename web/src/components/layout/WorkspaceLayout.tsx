@@ -1,8 +1,19 @@
 import { useEffect } from "react";
 import { Outlet, useParams, useNavigate } from "react-router-dom";
+import { AppShell } from "@astryxdesign/core/AppShell";
 import { useAuthStore } from "@/store/auth";
 import Sidebar from "./Sidebar";
 
+/**
+ * Persistent workspace frame.
+ *
+ * Responsive contract (AppShell auto-mobile, breakpoint `md`):
+ *   > 768px  SideNav 256px | content (edge-to-edge, contentPadding 0)
+ *   <= 768px SideNav collapses into an auto mobile drawer with a top-bar
+ *            hamburger (rendered by AppShell for sidenav-only layouts)
+ *
+ * contentPadding={0}: pages own their internal frame (canonical page scaffold).
+ */
 export default function WorkspaceLayout() {
   const { slug } = useParams<{ slug: string }>();
   const { workspace } = useAuthStore();
@@ -17,11 +28,8 @@ export default function WorkspaceLayout() {
   if (!workspace) return null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar />
-      <main className="flex-1 overflow-auto min-w-0">
-        <Outlet />
-      </main>
-    </div>
+    <AppShell sideNav={<Sidebar />} contentPadding={0}>
+      <Outlet />
+    </AppShell>
   );
 }

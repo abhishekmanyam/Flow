@@ -1,13 +1,23 @@
 import { useState } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Check, Trash2, ChevronDown, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Selector } from "@astryxdesign/core/Selector";
+import { DateInput } from "@astryxdesign/core/DateInput";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Button } from "@astryxdesign/core/Button";
+import { Text } from "@astryxdesign/core/Text";
+import { Timestamp as TimestampText } from "@astryxdesign/core/Timestamp";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { parseLocalDate } from "@/lib/date-utils";
 import { format } from "date-fns";
 import { TASK_PRIORITY_LABELS } from "@/lib/types";
+import PriorityIcon from "./PriorityIcon";
 import type { Subtask, WorkspaceMember, TaskPriority } from "@/lib/types";
+import type { Timestamp as FsTimestamp } from "firebase/firestore";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
 
 function tsToDate(ts: unknown): Date | null {
   if (!ts) return null;
@@ -36,76 +46,88 @@ export default function SubtaskRow({ subtask, members, canEdit, onToggle, onUpda
   };
 
   const dueDate = tsToDate(subtask.dueDate);
+  const closed = subtask.status === "closed";
 
   return (
-    <div className="rounded-md hover:bg-muted/50">
-      <div className="flex items-center gap-2 py-1.5 px-2">
+    <VStack gap={0}>
+      <HStack gap={2} align="center">
         {canEdit && (
-          <button onClick={() => setExpanded(!expanded)} className="shrink-0 text-muted-foreground hover:text-foreground">
-            {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
+          <IconButton
+            label={expanded ? "Collapse" : "Expand"}
+            variant="ghost"
+            size="sm"
+            icon={expanded ? <ChevronDown /> : <ChevronRight />}
+            onClick={() => setExpanded(!expanded)}
+          />
         )}
-        <button onClick={onToggle}
-          className={cn("h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
-            subtask.status === "closed" ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground hover:border-primary")}>
-          {subtask.status === "closed" && <Check className="h-2.5 w-2.5" />}
-        </button>
-        {editingTitle && canEdit ? (
-          <Input value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={handleTitleSave} onKeyDown={(e) => e.key === "Enter" && handleTitleSave()}
-            className="h-6 text-sm flex-1 py-0" autoFocus />
-        ) : (
-          <span className={cn("text-sm flex-1 truncate", subtask.status === "closed" && "line-through text-muted-foreground",
-            canEdit && "cursor-pointer")}
-            onClick={() => canEdit && setEditingTitle(true)}>
-            {subtask.title}
-          </span>
-        )}
-        {subtask.priority !== "none" && (
-          <span className="text-[10px] text-muted-foreground">{TASK_PRIORITY_LABELS[subtask.priority]}</span>
-        )}
-        {dueDate && (
-          <span className="text-[10px] text-muted-foreground">{format(dueDate, "MMM d")}</span>
-        )}
+        <CheckboxInput label="Toggle subtask" isLabelHidden value={closed} onChange={() => onToggle()} isDisabled={!canEdit} />
+        <HStack width="fill" align="center">
+          {editingTitle && canEdit ? (
+            <TextInput
+              label="Subtask title"
+              isLabelHidden
+              size="sm"
+              value={titleDraft}
+              onChange={setTitleDraft}
+              hasAutoFocus
+            />
+          ) : canEdit ? (
+            <Button label={subtask.title} variant="ghost" size="sm" onClick={() => { setTitleDraft(subtask.title); setEditingTitle(true); }}>
+              <Text type="body" color={closed ? "disabled" : "primary"} hasStrikethrough={closed} maxLines={1}>
+                {subtask.title}
+              </Text>
+            </Button>
+          ) : (
+            <Text type="body" color={closed ? "disabled" : "primary"} hasStrikethrough={closed} maxLines={1}>
+              {subtask.title}
+            </Text>
+          )}
+        </HStack>
+        {subtask.priority !== "none" && <PriorityIcon priority={subtask.priority} />}
+        {dueDate && <TimestampText value={dueDate.toISOString()} format="date" />}
         {canEdit && (
-          <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0" onClick={onDelete}>
-            <Trash2 className="h-3 w-3 text-destructive" />
-          </Button>
+          <IconButton label="Delete subtask" tooltip="Delete" variant="ghost" size="sm" icon={<Trash2 />} onClick={onDelete} />
         )}
-      </div>
-      {expanded && canEdit && (
-        <div className="pl-10 pr-2 pb-2 grid grid-cols-3 gap-2">
-          <div className="space-y-1">
-            <p className="text-[10px] text-muted-foreground font-medium">Priority</p>
-            <Select value={subtask.priority} onValueChange={(v) => onUpdate({ priority: v as TaskPriority })}>
-              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {(Object.entries(TASK_PRIORITY_LABELS) as [TaskPriority, string][]).map(([v, l]) => (
-                  <SelectItem key={v} value={v}>{l}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] text-muted-foreground font-medium">Assignee</p>
-            <Select value={subtask.assigneeId ?? "unassigned"} onValueChange={(v) => onUpdate({ assigneeId: v === "unassigned" ? null : v })}>
-              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Unassigned" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                {members.map((m) => (
-                  <SelectItem key={m.userId} value={m.userId}>{m.profile?.name ?? "Unknown"}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] text-muted-foreground font-medium">Due date</p>
-            <Input type="date" className="h-7 text-xs"
-              value={dueDate ? format(dueDate, "yyyy-MM-dd") : ""}
-              onChange={(e) => onUpdate({ dueDate: e.target.value ? parseLocalDate(e.target.value) as unknown as import("firebase/firestore").Timestamp : null })} />
-          </div>
-        </div>
+      </HStack>
+
+      {editingTitle && canEdit && (
+        <HStack gap={2} paddingBlock={1}>
+          <Button label="Save" variant="primary" size="sm" onClick={handleTitleSave} />
+          <Button label="Cancel" variant="ghost" size="sm" onClick={() => setEditingTitle(false)} />
+        </HStack>
       )}
-    </div>
+
+      {expanded && canEdit && (
+        <VStack paddingBlock={2} paddingInline={4}>
+          <FormLayout direction="horizontal">
+            <Selector
+              label="Priority"
+              value={subtask.priority}
+              onChange={(v) => onUpdate({ priority: v as TaskPriority })}
+              options={(Object.entries(TASK_PRIORITY_LABELS) as [TaskPriority, string][]).map(([v, l]) => ({ value: v, label: l }))}
+              size="sm"
+            />
+            <Selector
+              label="Assignee"
+              placeholder="Unassigned"
+              value={subtask.assigneeId ?? "unassigned"}
+              onChange={(v) => onUpdate({ assigneeId: v === "unassigned" ? null : v })}
+              options={[
+                { value: "unassigned", label: "Unassigned" },
+                ...members.map((m) => ({ value: m.userId, label: m.profile?.name ?? "Unknown" })),
+              ]}
+              size="sm"
+            />
+            <DateInput
+              label="Due date"
+              value={dueDate ? (format(dueDate, "yyyy-MM-dd") as ISODateString) : undefined}
+              onChange={(v) => onUpdate({ dueDate: v ? (parseLocalDate(v) as unknown as FsTimestamp) : null })}
+              size="sm"
+              hasClear
+            />
+          </FormLayout>
+        </VStack>
+      )}
+    </VStack>
   );
 }

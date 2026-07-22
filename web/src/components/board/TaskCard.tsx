@@ -1,21 +1,21 @@
 import { memo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { cn } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Card } from "@astryxdesign/core/Card";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Token } from "@astryxdesign/core/Token";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Icon } from "@astryxdesign/core/Icon";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { StackItem } from "@astryxdesign/core/Layout";
+import { Text } from "@astryxdesign/core/Text";
 import { Calendar } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import PriorityIcon from "@/components/tasks/PriorityIcon";
 import EpicBadge from "@/components/epics/EpicBadge";
+import LabelBadge from "@/components/labels/LabelBadge";
 import type { Task, WorkspaceMember, Label, Epic, Sprint } from "@/lib/types";
-
-function getInitials(name: string | null | undefined) {
-  if (!name) return "?";
-  return name.split(/\s/).map((s) => s[0]?.toUpperCase()).slice(0, 2).join("");
-}
 
 interface TaskCardProps {
   task: Task;
@@ -30,9 +30,9 @@ interface TaskCardProps {
 
 // rerender-memo: TaskCard is rendered many times, memoize it
 export default memo(function TaskCard({
-  task, isDragging, onSelect, members, labels = [], epics = [], sprints = [], taskIdentifier,
+  task, onSelect, members, labels = [], epics = [], sprints = [], taskIdentifier,
 }: TaskCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging: isSorting } =
+  const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: task.id });
 
   const assignee = task.assigneeId ? members.find((m) => m.userId === task.assigneeId)?.profile : undefined;
@@ -45,118 +45,70 @@ export default memo(function TaskCard({
     : null;
   const isOverdue = dueDate && isPast(dueDate) && task.status !== "done";
   const isDueToday = dueDate && isToday(dueDate);
+  const dueColor = isOverdue ? "red" : isDueToday ? "yellow" : "gray";
 
   const hasMetaRow2 = epic || sprint;
 
   return (
     <Card
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      padding={3}
+      variant={isOverdue ? "red" : "default"}
+      // dnd-kit functional-library exception: the library-computed transform/transition
+      // must ride as an inline style on the draggable node — nothing else here.
+      style={{ transform: CSS.Transform.toString(transform) ?? undefined, transition }}
+      onClick={onSelect}
       {...attributes}
       {...listeners}
-      onClick={onSelect}
-      className={cn(
-        "p-3 cursor-pointer select-none transition-all border",
-        "hover:shadow-md hover:-translate-y-0.5",
-        isOverdue && "border-destructive/40 bg-destructive/5",
-        (isDragging || isSorting) && "opacity-50 rotate-2 shadow-lg",
-      )}
     >
-      {/* Row 1: Identifier + Title */}
-      <div className="flex items-start gap-1.5">
-        {taskIdentifier && (
-          <span className="text-[11px] font-mono text-muted-foreground shrink-0 pt-px">
-            {taskIdentifier}
-          </span>
+      <VStack gap={2}>
+        <HStack gap={1.5} vAlign="start">
+          {taskIdentifier && (
+            <Text type="code" size="2xs" color="secondary">{taskIdentifier}</Text>
+          )}
+          <StackItem size="fill">
+            <Text type="label" weight="medium" maxLines={2}>{task.title}</Text>
+          </StackItem>
+        </HStack>
+
+        {task.description && (
+          <Text type="supporting" color="secondary" maxLines={2}>{task.description}</Text>
         )}
-        <p className="text-sm font-medium leading-snug line-clamp-2 flex-1">{task.title}</p>
-      </div>
 
-      {/* Description */}
-      {task.description && (
-        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{task.description}</p>
-      )}
+        {hasMetaRow2 && (
+          <HStack gap={1.5} vAlign="center" wrap="wrap">
+            {epic && <EpicBadge title={epic.title} color={epic.color} />}
+            {sprint && <Token label={sprint.name} color="purple" size="sm" />}
+          </HStack>
+        )}
 
-      {/* Row 2: Epic + Sprint (conditional) */}
-      {hasMetaRow2 && (
-        <div className="flex items-center gap-1.5 mt-1.5">
-          {epic && (
-            <EpicBadge title={epic.title} color={epic.color} className="text-[10px] px-1.5 py-0 h-4 max-w-[120px] truncate" />
-          )}
-          {sprint && (
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 max-w-[100px] truncate">
-              {sprint.name}
-            </Badge>
-          )}
-        </div>
-      )}
-
-      {/* Row 3: Metadata bar */}
-      <div className="flex items-center gap-1.5 mt-2">
-        {task.priority !== "none" && <PriorityIcon priority={task.priority} />}
-
-        {/* Label dots with tooltips */}
-        {taskLabels.length > 0 && (
-          <div className="flex items-center gap-0.5">
+        <HStack gap={1.5} vAlign="center" hAlign="between">
+          <HStack gap={1.5} vAlign="center" wrap="wrap">
+            {task.priority !== "none" && <PriorityIcon priority={task.priority} />}
             {taskLabels.slice(0, 3).map((l) => (
-              <Tooltip key={l.id}>
-                <TooltipTrigger asChild>
-                  <span
-                    className="h-2 w-2 rounded-full shrink-0"
-                    style={{ backgroundColor: l.color }}
-                  />
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">{l.name}</TooltipContent>
-              </Tooltip>
+              <LabelBadge key={l.id} name={l.name} color={l.color} />
             ))}
             {taskLabels.length > 3 && (
-              <span className="text-[10px] text-muted-foreground">+{taskLabels.length - 3}</span>
+              <Text type="supporting" color="secondary">+{taskLabels.length - 3}</Text>
             )}
-          </div>
-        )}
-
-        {/* Due date with urgency styling */}
-        {dueDate && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className={cn(
-                "flex items-center gap-0.5 text-[11px] rounded-sm px-1 py-0.5",
-                isOverdue && "bg-destructive/10 text-destructive font-medium",
-                isDueToday && !isOverdue && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 font-medium",
-                !isOverdue && !isDueToday && "text-muted-foreground",
-              )}>
-                <Calendar className="h-3 w-3" />
-                {format(dueDate, "MMM d")}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              {isOverdue ? "Overdue" : isDueToday ? "Due today" : `Due ${format(dueDate, "MMM d, yyyy")}`}
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* Story points */}
-        {task.storyPoints != null && task.storyPoints > 0 && (
-          <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 font-mono">
-            {task.storyPoints}
-          </Badge>
-        )}
-
-        {/* Assignee avatar */}
-        <div className="ml-auto">
+            {dueDate && (
+              <Token
+                label={format(dueDate, "MMM d")}
+                color={dueColor}
+                size="sm"
+                icon={<Icon icon={Calendar} size="xsm" />}
+                description={isOverdue ? "Overdue" : isDueToday ? "Due today" : `Due ${format(dueDate, "MMM d, yyyy")}`}
+              />
+            )}
+            {task.storyPoints != null && task.storyPoints > 0 && (
+              <Badge label={String(task.storyPoints)} variant="neutral" />
+            )}
+          </HStack>
           {assignee && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Avatar className="h-5 w-5">
-                  <AvatarImage src={assignee.avatarUrl ?? undefined} />
-                  <AvatarFallback className="text-[9px]">{getInitials(assignee.name)}</AvatarFallback>
-                </Avatar>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-xs">{assignee.name}</TooltipContent>
-            </Tooltip>
+            <Avatar size="xsmall" name={assignee.name ?? undefined} src={assignee.avatarUrl ?? undefined} />
           )}
-        </div>
-      </div>
+        </HStack>
+      </VStack>
     </Card>
   );
 });

@@ -44,6 +44,10 @@ import type {
   CalendarEvent,
   EventRSVP,
   EventRegistration,
+  CampRegistration,
+  CampRegistrationStatus,
+  Enrollment,
+  EnrollmentStatus,
   SprintStatus,
   Role,
   ProjectRole,
@@ -160,6 +164,16 @@ export const rsvpsCol = (wsId: string, eventId: string) =>
   collection(db, "workspaces", wsId, "calendar_events", eventId, "rsvps");
 export const rsvpDoc = (wsId: string, eventId: string, userId: string) =>
   doc(db, "workspaces", wsId, "calendar_events", eventId, "rsvps", userId);
+
+export const campRegistrationsCol = (wsId: string) =>
+  collection(db, "workspaces", wsId, "camp_registrations");
+export const campRegistrationDoc = (wsId: string, regId: string) =>
+  doc(db, "workspaces", wsId, "camp_registrations", regId);
+
+export const enrollmentsCol = (wsId: string) =>
+  collection(db, "workspaces", wsId, "enrollments");
+export const enrollmentDoc = (wsId: string, enrollmentId: string) =>
+  doc(db, "workspaces", wsId, "enrollments", enrollmentId);
 
 // ─── Workspace ops ────────────────────────────────────────────────────────────
 
@@ -1571,5 +1585,89 @@ export async function getMyRSVP(
   const snap = await getDoc(rsvpDoc(wsId, eventId, userId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as EventRSVP;
+}
+
+// ─── Summer Camp Registrations ───────────────────────────────────────────────
+
+export function subscribeToCampRegistrations(
+  wsId: string,
+  callback: (regs: CampRegistration[]) => void
+) {
+  const q = query(campRegistrationsCol(wsId), orderBy("createdAt", "desc"));
+  return onSnapshot(q, (snap) => {
+    callback(
+      snap.docs.map((d) => ({ id: d.id, ...d.data() }) as CampRegistration)
+    );
+  });
+}
+
+export async function updateCampRegistrationStatus(
+  wsId: string,
+  regId: string,
+  status: CampRegistrationStatus
+): Promise<void> {
+  await updateDoc(campRegistrationDoc(wsId, regId), {
+    status,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateCampRegistrationNotes(
+  wsId: string,
+  regId: string,
+  notes: string
+): Promise<void> {
+  await updateDoc(campRegistrationDoc(wsId, regId), {
+    notes,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteCampRegistration(
+  wsId: string,
+  regId: string
+): Promise<void> {
+  await deleteDoc(campRegistrationDoc(wsId, regId));
+}
+
+// ─── Enrollments ─────────────────────────────────────────────────────────────
+
+export function subscribeToEnrollments(
+  wsId: string,
+  callback: (enrollments: Enrollment[]) => void
+) {
+  const q = query(enrollmentsCol(wsId), orderBy("createdAt", "desc"));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Enrollment));
+  });
+}
+
+export async function updateEnrollmentStatus(
+  wsId: string,
+  enrollmentId: string,
+  status: EnrollmentStatus
+): Promise<void> {
+  await updateDoc(enrollmentDoc(wsId, enrollmentId), {
+    status,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateEnrollmentNotes(
+  wsId: string,
+  enrollmentId: string,
+  notes: string
+): Promise<void> {
+  await updateDoc(enrollmentDoc(wsId, enrollmentId), {
+    notes,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteEnrollment(
+  wsId: string,
+  enrollmentId: string
+): Promise<void> {
+  await deleteDoc(enrollmentDoc(wsId, enrollmentId));
 }
 

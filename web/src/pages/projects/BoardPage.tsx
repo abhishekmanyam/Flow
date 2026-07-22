@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { useProjectAccess } from "@/hooks/useProjectAccess";
 import { useTaskFilters } from "@/hooks/useTaskFilters";
-import { MotionPage } from "@/components/ui/motion-page";
 import { subscribeToTasks, subscribeToLabels, subscribeToEpics, subscribeToSprints, getWorkspaceMembers, getProjectMembers, projectDoc } from "@/lib/firestore";
 import { getDoc } from "firebase/firestore";
 import ProjectHeader from "@/components/projects/ProjectHeader";
@@ -18,15 +17,34 @@ import { buildTaskIdentifiers } from "@/lib/task-utils";
 import { useBoardPresence } from "@/hooks/useBoardPresence";
 import TaskDetailSheet from "@/components/tasks/TaskDetailSheet";
 import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { StackItem } from "@astryxdesign/core/Layout";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Button } from "@astryxdesign/core/Button";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Icon } from "@astryxdesign/core/Icon";
+import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
+import { Text } from "@astryxdesign/core/Text";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Plus, Funnel, Lock } from "lucide-react";
 import type { ViewMode } from "@/components/board/ViewToggle";
 import type { Task, Project, WorkspaceMember, Label, Epic, Sprint, TaskStatus } from "@/lib/types";
 
 function getStoredView(): ViewMode {
   return (localStorage.getItem("board-view") as ViewMode) ?? "board";
+}
+
+function BoardSkeleton() {
+  return (
+    <VStack gap={4} padding={6} height="100%">
+      <Skeleton height={32} width={192} />
+      <HStack gap={3}>
+        {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} height={256} width={288} index={i} />)}
+      </HStack>
+    </VStack>
+  );
 }
 
 export default function BoardPage() {
@@ -104,139 +122,144 @@ export default function BoardPage() {
     });
   }, [filteredTasks]);
 
-  if (accessLoading || !workspace || !user) return (
-    <div className="p-6 space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <div className="flex gap-3">
-        {[1,2,3,4,5].map((i) => <Skeleton key={i} className="h-64 w-72" />)}
-      </div>
-    </div>
-  );
+  if (accessLoading || !workspace || !user) return <BoardSkeleton />;
 
   if (!hasAccess) return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center space-y-2">
-        <h2 className="text-lg font-semibold">Access Denied</h2>
-        <p className="text-sm text-muted-foreground">You don&apos;t have access to this project.</p>
-      </div>
-    </div>
+    <VStack height="100%" hAlign="center" vAlign="center">
+      <EmptyState
+        icon={<Icon icon={Lock} size="lg" color="secondary" />}
+        title="Access denied"
+        description="You don't have access to this project."
+      />
+    </VStack>
   );
 
-  if (!project) return (
-    <div className="p-6 space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <div className="flex gap-3">
-        {[1,2,3,4,5].map((i) => <Skeleton key={i} className="h-64 w-72" />)}
-      </div>
-    </div>
+  if (!project) return <BoardSkeleton />;
+
+  const filtersButton = (
+    <Button
+      label={showFilters ? "Hide filters" : "Filters"}
+      variant="ghost"
+      size="sm"
+      icon={<Icon icon={Funnel} size="sm" />}
+      endContent={hasActiveFilters ? <Badge label="Active" variant="neutral" /> : undefined}
+      onClick={() => setShowFilters((p) => !p)}
+    />
   );
+
+  const filterBarNode = (
+    <TaskFilterBar
+      filters={filters}
+      hasActiveFilters={hasActiveFilters}
+      members={members}
+      labels={labels}
+      epics={epics}
+      sprints={sprints}
+      onUpdateFilter={updateFilter}
+      onClear={clearFilters}
+    />
+  );
+
+  const selectAllValue: boolean | "indeterminate" =
+    filteredTasks.length > 0 && selectedIds.size === filteredTasks.length
+      ? true
+      : selectedIds.size > 0
+        ? "indeterminate"
+        : false;
 
   return (
-    <MotionPage className="flex flex-col h-full">
+    <VStack height="100%">
       <ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} presenceUsers={presenceUsers} currentUserId={user.uid} />
 
-      {view === "board" ? (
-        <KanbanBoard
-          project={project}
-          tasks={filteredTasks}
-          members={members}
-          labels={labels}
-          epics={epics}
-          sprints={sprints}
-          currentUserId={user.uid}
-          canEdit={canEdit}
-          isProjectAdmin={isProjectAdmin}
-          workspaceId={workspace.id}
-          viewToggle={
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowFilters((p) => !p)}>
-                <Search className="mr-1 h-3 w-3" />{showFilters ? "Hide filters" : "Filters"}{hasActiveFilters && " *"}
-              </Button>
+      <StackItem size="fill">
+        {view === "board" ? (
+          <KanbanBoard
+            project={project}
+            tasks={filteredTasks}
+            members={members}
+            labels={labels}
+            epics={epics}
+            sprints={sprints}
+            currentUserId={user.uid}
+            canEdit={canEdit}
+            isProjectAdmin={isProjectAdmin}
+            workspaceId={workspace.id}
+            viewToggle={
+              <HStack gap={2} vAlign="center">
+                {filtersButton}
+                <ViewToggle value={view} onChange={handleViewChange} />
+              </HStack>
+            }
+            filterBar={showFilters ? filterBarNode : undefined}
+          />
+        ) : (
+          <VStack height="100%">
+            <HStack gap={2} vAlign="center" paddingInline={6} paddingBlock={3}>
+              {view === "list" && canEdit && (
+                <Button
+                  label="Add task"
+                  variant="primary"
+                  size="sm"
+                  icon={<Icon icon={Plus} size="sm" />}
+                  onClick={() => setCreateStatus("backlog")}
+                />
+              )}
+              {filtersButton}
+              <StackItem size="fill" />
               <ViewToggle value={view} onChange={handleViewChange} />
-            </div>
-          }
-          filterBar={showFilters ? (
-            <TaskFilterBar
-              filters={filters}
-              hasActiveFilters={hasActiveFilters}
-              members={members}
-              labels={labels}
-              epics={epics}
-              sprints={sprints}
-              onUpdateFilter={updateFilter}
-              onClear={clearFilters}
-            />
-          ) : undefined}
-        />
-      ) : (
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <div className="flex items-center gap-2 px-6 py-3 border-b">
-            {view === "list" && canEdit && (
-              <Button size="sm" onClick={() => setCreateStatus("backlog")}>
-                <Plus className="mr-1.5 h-4 w-4" />Add task
-              </Button>
+            </HStack>
+            <Divider />
+            {showFilters && (
+              <>
+                <VStack paddingInline={6} paddingBlock={2}>{filterBarNode}</VStack>
+                <Divider />
+              </>
             )}
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowFilters((p) => !p)}>
-              <Search className="mr-1 h-3 w-3" />{showFilters ? "Hide filters" : "Filters"}{hasActiveFilters && " *"}
-            </Button>
-            <div className="ml-auto">
-              <ViewToggle value={view} onChange={handleViewChange} />
-            </div>
-          </div>
-          {showFilters && (
-            <div className="px-6 py-2 border-b">
-              <TaskFilterBar
-                filters={filters}
-                hasActiveFilters={hasActiveFilters}
-                members={members}
-                labels={labels}
-                epics={epics}
-                sprints={sprints}
-                onUpdateFilter={updateFilter}
-                onClear={clearFilters}
-              />
-            </div>
-          )}
-          {view === "list" && canEdit && (
-            <div className="px-6 py-1.5 border-b flex items-center gap-2">
-              <Checkbox
-                checked={selectedIds.size > 0 && selectedIds.size === filteredTasks.length}
-                onCheckedChange={toggleSelectAll}
-              />
-              <span className="text-xs text-muted-foreground">
-                {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
-              </span>
-            </div>
-          )}
-          {view === "list" ? (
-            <div className="flex-1 overflow-auto px-6">
-              <ListView
-                tasks={filteredTasks}
-                members={members}
-                labels={labels}
-                epics={epics}
-                sprints={sprints}
-                taskIdentifiers={taskIdentifiers}
-                onSelectTask={setSelectedTaskId}
-                selectedIds={selectedIds}
-                onToggleSelect={canEdit ? toggleTaskSelection : undefined}
-              />
-            </div>
-          ) : (
-            <div className="flex-1 overflow-hidden">
-              <TimelineView
-                tasks={filteredTasks}
-                members={members}
-                labels={labels}
-                epics={epics}
-                sprints={sprints}
-                taskIdentifiers={taskIdentifiers}
-                onSelectTask={setSelectedTaskId}
-              />
-            </div>
-          )}
-        </div>
-      )}
+            {view === "list" && canEdit && (
+              <>
+                <HStack gap={2} vAlign="center" paddingInline={6} paddingBlock={1.5}>
+                  <CheckboxInput
+                    label="Select all tasks"
+                    isLabelHidden
+                    size="sm"
+                    value={selectAllValue}
+                    onChange={toggleSelectAll}
+                  />
+                  <Text type="supporting" color="secondary">
+                    {selectedIds.size > 0 ? `${selectedIds.size} selected` : "Select all"}
+                  </Text>
+                </HStack>
+                <Divider />
+              </>
+            )}
+            <StackItem size="fill">
+              {view === "list" ? (
+                <ListView
+                  tasks={filteredTasks}
+                  members={members}
+                  labels={labels}
+                  epics={epics}
+                  sprints={sprints}
+                  taskIdentifiers={taskIdentifiers}
+                  onSelectTask={setSelectedTaskId}
+                  selectedIds={selectedIds}
+                  onToggleSelect={canEdit ? toggleTaskSelection : undefined}
+                />
+              ) : (
+                <TimelineView
+                  tasks={filteredTasks}
+                  members={members}
+                  labels={labels}
+                  epics={epics}
+                  sprints={sprints}
+                  taskIdentifiers={taskIdentifiers}
+                  onSelectTask={setSelectedTaskId}
+                />
+              )}
+            </StackItem>
+          </VStack>
+        )}
+      </StackItem>
 
       {(view === "list" || view === "timeline") && (
         <>
@@ -264,6 +287,6 @@ export default function BoardPage() {
       )}
 
       <TaskSearch tasks={tasks} onSelect={setSelectedTaskId} />
-    </MotionPage>
+    </VStack>
   );
 }

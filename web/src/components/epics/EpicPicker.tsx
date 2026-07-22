@@ -1,10 +1,14 @@
-import { useState } from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
-import { Button } from "@/components/ui/button";
-import { Check, Zap } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Selector } from "@astryxdesign/core/Selector";
 import type { Epic } from "@/lib/types";
+
+/** Colored dot carrying the epic's own hex color, used as an option/left icon. */
+function colorDot(color: string) {
+  return (
+    <svg viewBox="0 0 8 8" width={8} height={8} aria-hidden="true">
+      <circle cx={4} cy={4} r={4} fill={color} />
+    </svg>
+  );
+}
 
 interface EpicPickerProps {
   epics: Epic[];
@@ -14,46 +18,18 @@ interface EpicPickerProps {
 }
 
 export default function EpicPicker({ epics, selectedId, onChange, disabled }: EpicPickerProps) {
-  const [open, setOpen] = useState(false);
-  const selected = epics.find((e) => e.id === selectedId);
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 justify-start text-sm font-normal" disabled={disabled}>
-          {selected ? (
-            <span className="flex items-center gap-1.5">
-              <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: selected.color }} />
-              <span className="truncate">{selected.title}</span>
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <Zap className="h-3.5 w-3.5" />Epic
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-52 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search epics..." />
-          <CommandList>
-            <CommandEmpty>No epics found.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem onSelect={() => { onChange(null); setOpen(false); }} className="flex items-center gap-2">
-                <span className="flex-1">No epic</span>
-                <Check className={cn("h-3.5 w-3.5", !selectedId ? "opacity-100" : "opacity-0")} />
-              </CommandItem>
-              {epics.map((epic) => (
-                <CommandItem key={epic.id} onSelect={() => { onChange(epic.id); setOpen(false); }} className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: epic.color }} />
-                  <span className="flex-1 truncate">{epic.title}</span>
-                  <Check className={cn("h-3.5 w-3.5", selectedId === epic.id ? "opacity-100" : "opacity-0")} />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <Selector
+      label="Epic"
+      isLabelHidden
+      placeholder="Epic"
+      value={selectedId}
+      onChange={(v) => onChange(v || null)}
+      isDisabled={disabled}
+      hasClear
+      hasSearch={epics.length > 8}
+      searchPlaceholder="Search epics..."
+      options={epics.map((e) => ({ value: e.id, label: e.title, icon: colorDot(e.color) }))}
+    />
   );
 }

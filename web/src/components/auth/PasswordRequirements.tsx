@@ -1,5 +1,7 @@
-import { Check, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Text } from "@astryxdesign/core/Text";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
 
 export type PasswordCheck = {
   label: string;
@@ -25,19 +27,15 @@ export default function PasswordRequirements({ password }: { password: string })
   if (!password) return null;
 
   return (
-    <ul className="space-y-1 mt-2">
+    <VStack gap={1}>
       {checks.map((c) => (
-        <li key={c.label} className="flex items-center gap-1.5 text-xs">
-          {c.met ? (
-            <Check className="h-3 w-3 text-green-500 shrink-0" />
-          ) : (
-            <X className="h-3 w-3 text-destructive shrink-0" />
-          )}
-          <span className={cn(c.met ? "text-muted-foreground" : "text-destructive")}>
+        <HStack key={c.label} gap={1.5} align="center">
+          <Icon icon={c.met ? "check" : "close"} size="xsm" color={c.met ? "success" : "error"} />
+          <Text type="supporting" color="secondary">
             {c.label}
-          </span>
-        </li>
+          </Text>
+        </HStack>
       ))}
-    </ul>
+    </VStack>
   );
 }

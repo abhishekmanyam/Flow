@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { useProjectAccess } from "@/hooks/useProjectAccess";
-import { MotionPage } from "@/components/ui/motion-page";
 import { subscribeToEpics, subscribeToTasks, subscribeToSprints, subscribeToLabels, createEpic, updateEpic, deleteEpic, updateTask, projectDoc, getWorkspaceMembers, getProjectMembers } from "@/lib/firestore";
 import { getDoc } from "firebase/firestore";
 import {
@@ -13,28 +12,66 @@ import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import ProjectHeader from "@/components/projects/ProjectHeader";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
-import { EmptyState } from "@/components/ui/empty-state";
+import { Layout, LayoutContent, LayoutHeader } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Text } from "@astryxdesign/core/Text";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Token } from "@astryxdesign/core/Token";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { LayoutFooter } from "@astryxdesign/core/Layout";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { Field } from "@astryxdesign/core/Field";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { TextArea } from "@astryxdesign/core/TextArea";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { Banner } from "@astryxdesign/core/Banner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { toast } from "@/components/system/toast";
 import PriorityIcon from "@/components/tasks/PriorityIcon";
 import LabelPicker from "@/components/labels/LabelPicker";
 import LabelBadge from "@/components/labels/LabelBadge";
-import { Plus, Pencil, Trash2, Loader2, Layers, ChevronRight, GripVertical, Zap } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { EPIC_STATUS_LABELS, LABEL_COLORS, STATUS_DOT_COLORS } from "@/lib/types";
-import type { Project, Epic, Task, EpicStatus, Sprint, WorkspaceMember, Label as LabelType } from "@/lib/types";
+import { Plus, Pencil, Trash2, Layers, ChevronRight, GripVertical, Zap } from "lucide-react";
+import { EPIC_STATUS_LABELS, LABEL_COLORS } from "@/lib/types";
+import type { Project, Epic, Task, EpicStatus, Sprint, WorkspaceMember, Label as LabelType, TaskStatus } from "@/lib/types";
+
+const STATUS_DOT_VARIANT: Record<TaskStatus, "neutral" | "accent" | "warning" | "success" | "error"> = {
+  backlog: "neutral",
+  todo: "neutral",
+  in_progress: "accent",
+  in_review: "warning",
+  done: "success",
+};
+
+const EPIC_STATUS_TOKEN: Record<EpicStatus, "gray" | "blue" | "green" | "red"> = {
+  not_started: "gray",
+  in_progress: "blue",
+  done: "green",
+  cancelled: "red",
+};
+
+function colorDot(color: string, size = 12) {
+  return (
+    <svg viewBox="0 0 12 12" width={size} height={size} aria-hidden="true">
+      <circle cx={6} cy={6} r={6} fill={color} />
+    </svg>
+  );
+}
+
+function colorCircle(color: string, selected: boolean) {
+  return (
+    <svg viewBox="0 0 16 16" width={16} height={16} aria-hidden="true">
+      <circle cx={8} cy={8} r={selected ? 6 : 7} fill={color} stroke={selected ? "currentColor" : "none"} strokeWidth={selected ? 2 : 0} />
+    </svg>
+  );
+}
 
 function getInitials(name: string | null | undefined) {
   if (!name) return "?";
@@ -129,10 +166,6 @@ export default function EpicsPage() {
     } catch { toast.error("Failed to push tasks"); }
   };
 
-  if (accessLoading || !workspace || !user || !project) return (
-    <div className="p-6"><Skeleton className="h-8 w-48" /></div>
-  );
-
   const getEpicStats = (epicId: string) => {
     const epicTasks = tasks.filter((t) => t.epicId === epicId);
     const done = epicTasks.filter((t) => t.status === "done").length;
@@ -142,216 +175,205 @@ export default function EpicsPage() {
     return { total, done, points, donePoints, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
   };
 
-  const SortableEpicCard = ({ epic }: { epic: Epic }) => {
+  if (accessLoading || !workspace || !user || !project) {
+    return (
+      <Layout>
+        <LayoutContent padding={4}>
+          <VStack gap={3}><Skeleton height={28} width={200} /><Skeleton height={240} /></VStack>
+        </LayoutContent>
+      </Layout>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <Layout>
+        <LayoutContent padding={4}>
+          <Banner status="error" title="Access denied" description="You don't have access to this project." />
+        </LayoutContent>
+      </Layout>
+    );
+  }
+
+  const SortableEpicRow = ({ epic }: { epic: Epic }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: epic.id });
+    const dndStyle = { transform: CSS.Transform.toString(transform), transition };
     const stats = getEpicStats(epic.id);
     const epicTasks = tasks.filter((t) => t.epicId === epic.id);
     const isExpanded = expandedEpics.has(epic.id);
+
     return (
-      <SortableEpicCardInner
-        epic={epic} stats={stats} epicTasks={epicTasks} isExpanded={isExpanded}
-        toggleExpanded={toggleExpanded} canEdit={canEdit} availableSprints={availableSprints}
-        memberMap={memberMap} labelMap={labelMap} navigate={navigate} slug={slug} projectId={projectId}
-        workspace={workspace} setEditingEpic={setEditingEpic} pushEpicTasksToSprint={pushEpicTasksToSprint}
-      />
+      <VStack gap={0} ref={setNodeRef} style={dndStyle} {...attributes}>
+        <HStack gap={2} align="start" paddingInline={4} paddingBlock={3}>
+          {canEdit && (
+            <HStack {...listeners} align="center" aria-label="Drag epic">
+              <GripVertical size={16} />
+            </HStack>
+          )}
+          <IconButton
+            label={isExpanded ? "Collapse" : "Expand"}
+            variant="ghost"
+            size="sm"
+            icon={<ChevronRight size={16} />}
+            onClick={() => toggleExpanded(epic.id)}
+          />
+          <HStack align="center" paddingBlock={1}>{colorDot(epic.color)}</HStack>
+          <VStack gap={2} width="100%">
+            <HStack gap={2} align="center" wrap="wrap">
+              <Text type="body" weight="medium" maxLines={1}>{epic.title}</Text>
+              <Token label={EPIC_STATUS_LABELS[epic.status]} color={EPIC_STATUS_TOKEN[epic.status]} size="sm" />
+            </HStack>
+            {epic.description && (
+              <Text type="supporting" color="secondary" maxLines={2}>{epic.description}</Text>
+            )}
+            {(epic.labelIds?.length ?? 0) > 0 && (
+              <HStack gap={1} wrap="wrap">
+                {epic.labelIds.map((lid) => {
+                  const label = labelMap.get(lid);
+                  return label ? <LabelBadge key={lid} name={label.name} color={label.color} /> : null;
+                })}
+              </HStack>
+            )}
+            <VStack gap={1}>
+              <HStack justify="between" align="center">
+                <Text type="supporting" color="secondary">{stats.done}/{stats.total} tasks done</Text>
+                <Text type="supporting" color="secondary">{stats.donePoints}/{stats.points} points</Text>
+              </HStack>
+              <ProgressBar label={`${epic.title} progress`} value={stats.pct} isLabelHidden variant={stats.pct === 100 ? "success" : "accent"} />
+            </VStack>
+          </VStack>
+          {canEdit && (
+            <HStack gap={1} align="center">
+              {availableSprints.length > 0 && (
+                <IconButton
+                  label={`Push to ${availableSprints[0].name}`}
+                  variant="ghost"
+                  size="sm"
+                  icon={<Zap size={14} />}
+                  onClick={() => pushEpicTasksToSprint(epic.id, availableSprints[0].id)}
+                />
+              )}
+              <IconButton label="Edit epic" variant="ghost" size="sm" icon={<Pencil size={14} />} onClick={() => setEditingEpic(epic)} />
+              <IconButton
+                label="Delete epic"
+                variant="ghost"
+                size="sm"
+                icon={<Trash2 size={14} />}
+                clickAction={async () => {
+                  await deleteEpic(workspace.id, projectId!, epic.id);
+                  toast.success("Epic deleted");
+                }}
+              />
+            </HStack>
+          )}
+        </HStack>
+        {isExpanded && (
+          epicTasks.length === 0 ? (
+            <VStack paddingInline={4} paddingBlock={2}>
+              <Text type="supporting" color="secondary">No tasks in this epic</Text>
+            </VStack>
+          ) : (
+            <List hasDividers>
+              {epicTasks.map((task) => {
+                const mem = task.assigneeId ? memberMap.get(task.assigneeId) : null;
+                return (
+                  <ListItem
+                    key={task.id}
+                    label={task.title}
+                    onClick={() => navigate(`/${slug}/projects/${projectId}/board`)}
+                    startContent={<StatusDot variant={STATUS_DOT_VARIANT[task.status]} label={task.status} />}
+                    endContent={
+                      <HStack gap={2} align="center">
+                        <PriorityIcon priority={task.priority} />
+                        {mem && <Avatar size="xsmall" src={mem.profile?.avatarUrl ?? undefined} name={mem.profile?.name ?? getInitials(mem.profile?.name)} />}
+                      </HStack>
+                    }
+                  />
+                );
+              })}
+            </List>
+          )
+        )}
+      </VStack>
     );
   };
 
   return (
-    <MotionPage className="flex flex-col h-full">
-      <ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} />
-      <div className="flex items-center gap-2 px-6 py-3 border-b">
-        {canEdit && (
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />Add epic
-          </Button>
-        )}
-      </div>
-      <DndContext sensors={canEdit ? sensors : undefined} collisionDetection={closestCenter} onDragStart={handleEpicDragStart} onDragEnd={handleEpicDragEnd}>
-        <div className="flex-1 overflow-auto p-6">
-          {epics.length === 0 ? (
-            <EmptyState icon={Layers} title="No epics yet" description="Create one to group related tasks into larger goals" />
-          ) : (
-            <SortableContext items={epics.map((e) => e.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-3 max-w-3xl">
-                {epics.map((epic) => (
-                  <SortableEpicCard key={epic.id} epic={epic} />
-                ))}
-              </div>
-            </SortableContext>
-          )}
-        </div>
-
-        <DragOverlay>
-          {activeDragEpic && (
-            <div className="border rounded-lg bg-background shadow-lg p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-4 w-4 rounded-full shrink-0" style={{ backgroundColor: activeDragEpic.color }} />
-                <h3 className="font-medium truncate">{activeDragEpic.title}</h3>
-              </div>
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
-
-      {createOpen && (
-        <EpicFormDialog
-          labels={labels}
-          onClose={() => setCreateOpen(false)}
-          onSave={async (data) => {
-            await createEpic(workspace.id, projectId!, {
-              ...data,
-              projectId: projectId!,
-              position: epics.length,
-              createdBy: user.uid,
-            });
-            setCreateOpen(false);
-            toast.success("Epic created");
-          }}
-        />
-      )}
-      {editingEpic && (
-        <EpicFormDialog
-          epic={editingEpic}
-          labels={labels}
-          onClose={() => setEditingEpic(null)}
-          onSave={async (data) => {
-            await updateEpic(workspace.id, projectId!, editingEpic.id, data);
-            setEditingEpic(null);
-            toast.success("Epic updated");
-          }}
-        />
-      )}
-    </MotionPage>
-  );
-}
-
-// ─── Sortable Epic Card (internal) ────────────────────────────────────────────
-
-function SortableEpicCardInner({
-  epic, stats, epicTasks, isExpanded, toggleExpanded, canEdit, availableSprints, memberMap, labelMap, navigate, slug, projectId, workspace, setEditingEpic, pushEpicTasksToSprint,
-}: {
-  epic: Epic; stats: { total: number; done: number; points: number; donePoints: number; pct: number };
-  epicTasks: Task[]; isExpanded: boolean; toggleExpanded: (id: string) => void;
-  canEdit: boolean; availableSprints: Sprint[]; memberMap: Map<string, WorkspaceMember>;
-  labelMap: Map<string, LabelType>;
-  navigate: ReturnType<typeof useNavigate>; slug: string | undefined; projectId: string | undefined;
-  workspace: { id: string }; setEditingEpic: (e: Epic) => void;
-  pushEpicTasksToSprint: (epicId: string, sprintId: string) => Promise<void>;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: epic.id });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} className="border rounded-lg space-y-0">
-      <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(epic.id)}>
-        <div className="p-4 space-y-3">
-          <div className="flex items-start gap-3">
-            {canEdit && (
-              <button className="mt-1 shrink-0 cursor-grab active:cursor-grabbing touch-none" {...listeners}>
-                <GripVertical className="h-4 w-4 text-muted-foreground" />
-              </button>
-            )}
-            <CollapsibleTrigger asChild>
-              <button className="mt-1 shrink-0 p-0.5 rounded hover:bg-muted transition-colors">
-                <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", isExpanded && "rotate-90")} />
-              </button>
-            </CollapsibleTrigger>
-            <div className="h-4 w-4 rounded-full mt-0.5 shrink-0" style={{ backgroundColor: epic.color }} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-medium truncate">{epic.title}</h3>
-                <span className={cn("text-xs px-1.5 py-0.5 rounded-full",
-                  epic.status === "done" ? "bg-green-100 text-green-700" :
-                  epic.status === "in_progress" ? "bg-blue-100 text-blue-700" :
-                  epic.status === "cancelled" ? "bg-red-100 text-red-700" :
-                  "bg-muted text-muted-foreground")}>
-                  {EPIC_STATUS_LABELS[epic.status]}
-                </span>
-              </div>
-              {epic.description && (
-                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{epic.description}</p>
-              )}
-              {(epic.labelIds?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {epic.labelIds.map((lid) => {
-                    const label = labelMap.get(lid);
-                    return label ? <LabelBadge key={lid} name={label.name} color={label.color} className="text-[10px] px-1.5 py-0" /> : null;
-                  })}
-                </div>
-              )}
-            </div>
-            {canEdit && (
-              <div className="flex gap-1 shrink-0">
-                {availableSprints.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
-                        <Zap className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                      {availableSprints.map((s) => (
-                        <DropdownMenuItem key={s.id} onClick={() => pushEpicTasksToSprint(epic.id, s.id)}>
-                          Push to {s.name}
-                        </DropdownMenuItem>
+    <>
+    <Layout
+      header={<ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} />}
+      content={
+        <Layout
+          header={
+            canEdit ? (
+              <LayoutHeader hasDivider>
+                <HStack paddingInline={4} paddingBlock={3}>
+                  <Button label="Add epic" variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)} />
+                </HStack>
+              </LayoutHeader>
+            ) : undefined
+          }
+          content={
+            <LayoutContent padding={0}>
+              {epics.length === 0 ? (
+                <EmptyState icon={<Layers size={28} />} title="No epics yet" description="Create one to group related tasks into larger goals" />
+              ) : (
+                <DndContext sensors={canEdit ? sensors : undefined} collisionDetection={closestCenter} onDragStart={handleEpicDragStart} onDragEnd={handleEpicDragEnd}>
+                  <SortableContext items={epics.map((e) => e.id)} strategy={verticalListSortingStrategy}>
+                    <VStack gap={0}>
+                      {epics.map((epic, i) => (
+                        <VStack gap={0} key={epic.id}>
+                          <SortableEpicRow epic={epic} />
+                          {i < epics.length - 1 && <Divider />}
+                        </VStack>
                       ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setEditingEpic(epic); }}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    await deleteEpic(workspace.id, projectId!, epic.id);
-                    toast.success("Epic deleted");
-                  }}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{stats.done}/{stats.total} tasks done</span>
-              <span>{stats.donePoints}/{stats.points} points</span>
-            </div>
-            <Progress value={stats.pct} className="h-2" />
-          </div>
-        </div>
-        <CollapsibleContent>
-          <div className="border-t">
-            {epicTasks.length === 0 ? (
-              <p className="text-sm text-muted-foreground px-4 py-3">No tasks in this epic</p>
-            ) : (
-              <div className="divide-y">
-                {epicTasks.map((task) => {
-                  const mem = task.assigneeId ? memberMap.get(task.assigneeId) : null;
-                  return (
-                    <div
-                      key={task.id}
-                      className="flex items-center gap-2.5 px-4 py-2 hover:bg-muted/30 cursor-pointer"
-                      onClick={() => navigate(`/${slug}/projects/${projectId}/board`)}
-                    >
-                      <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT_COLORS[task.status])} />
-                      <span className="text-sm flex-1 truncate">{task.title}</span>
-                      <PriorityIcon priority={task.priority} className="h-3.5 w-3.5 shrink-0" />
-                      {mem && (
-                        <Avatar className="h-5 w-5 shrink-0">
-                          <AvatarImage src={mem.profile?.avatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[9px]">{getInitials(mem.profile?.name)}</AvatarFallback>
-                        </Avatar>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-    </div>
+                    </VStack>
+                  </SortableContext>
+                  <DragOverlay>
+                    {activeDragEpic && (
+                      <HStack gap={2} align="center" padding={3}>
+                        {colorDot(activeDragEpic.color)}
+                        <Text type="body" weight="medium">{activeDragEpic.title}</Text>
+                      </HStack>
+                    )}
+                  </DragOverlay>
+                </DndContext>
+              )}
+            </LayoutContent>
+          }
+        />
+      }
+    />
+
+    {createOpen && (
+      <EpicFormDialog
+        labels={labels}
+        onClose={() => setCreateOpen(false)}
+        onSave={async (data) => {
+          await createEpic(workspace.id, projectId!, {
+            ...data,
+            projectId: projectId!,
+            position: epics.length,
+            createdBy: user.uid,
+          });
+          setCreateOpen(false);
+          toast.success("Epic created");
+        }}
+      />
+    )}
+    {editingEpic && (
+      <EpicFormDialog
+        epic={editingEpic}
+        labels={labels}
+        onClose={() => setEditingEpic(null)}
+        onSave={async (data) => {
+          await updateEpic(workspace.id, projectId!, editingEpic.id, data);
+          setEditingEpic(null);
+          toast.success("Epic updated");
+        }}
+      />
+    )}
+    </>
   );
 }
 
@@ -372,8 +394,7 @@ function EpicFormDialog({ epic, labels, onClose, onSave }: EpicFormDialogProps) 
   const [labelIds, setLabelIds] = useState<string[]>(epic?.labelIds ?? []);
   const [saving, setSaving] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!title.trim()) return;
     setSaving(true);
     try {
@@ -386,57 +407,50 @@ function EpicFormDialog({ epic, labels, onClose, onSave }: EpicFormDialogProps) 
   };
 
   return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{epic ? "Edit Epic" : "Create Epic"}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Title *</Label>
-            <Input placeholder="Epic title" value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
-          </div>
-          <div className="space-y-2">
-            <Label>Description</Label>
-            <Textarea placeholder="What's this epic about?" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as EpicStatus)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(Object.entries(EPIC_STATUS_LABELS) as [EpicStatus, string][]).map(([v, l]) => (
-                    <SelectItem key={v} value={v}>{l}</SelectItem>
+    <Dialog isOpen onOpenChange={(v) => !v && onClose()} purpose="form" width={480}>
+      <Layout
+        header={<DialogHeader title={epic ? "Edit Epic" : "Create Epic"} onOpenChange={(v) => !v && onClose()} />}
+        content={
+          <LayoutContent padding={4}>
+            <FormLayout>
+              <TextInput label="Title" isRequired value={title} onChange={setTitle} placeholder="Epic title" hasAutoFocus />
+              <TextArea label="Description" value={description} onChange={setDescription} placeholder="What's this epic about?" rows={3} isOptional />
+              <Selector
+                label="Status"
+                value={status}
+                onChange={(v) => setStatus(v as EpicStatus)}
+                options={(Object.entries(EPIC_STATUS_LABELS) as [EpicStatus, string][]).map(([value, label]) => ({ value, label }))}
+              />
+              <Field label="Color" inputID="epic-color">
+                <HStack gap={1} wrap="wrap">
+                  {LABEL_COLORS.map((c) => (
+                    <IconButton
+                      key={c}
+                      label={`Color ${c}`}
+                      variant={color === c ? "secondary" : "ghost"}
+                      icon={colorCircle(c, color === c)}
+                      onClick={() => setColor(c)}
+                    />
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Color</Label>
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {LABEL_COLORS.map((c) => (
-                  <button key={c} type="button" onClick={() => setColor(c)}
-                    className={cn("h-5 w-5 rounded-full border-2 transition-all",
-                      color === c ? "border-foreground scale-110" : "border-transparent hover:border-muted-foreground")}
-                    style={{ backgroundColor: c }} />
-                ))}
-              </div>
-            </div>
-          </div>
-          {labels.length > 0 && (
-            <div className="space-y-2">
-              <Label>Labels</Label>
-              <LabelPicker labels={labels} selectedIds={labelIds} onChange={setLabelIds} />
-            </div>
-          )}
-          <div className="flex gap-2 pt-1">
-            <Button type="submit" disabled={saving || !title.trim()} className="flex-1">
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {epic ? "Save" : "Create"}
-            </Button>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          </div>
-        </form>
-      </DialogContent>
+                </HStack>
+              </Field>
+              {labels.length > 0 && (
+                <Field label="Labels" inputID="epic-labels">
+                  <LabelPicker labels={labels} selectedIds={labelIds} onChange={setLabelIds} />
+                </Field>
+              )}
+            </FormLayout>
+          </LayoutContent>
+        }
+        footer={
+          <LayoutFooter hasDivider>
+            <HStack gap={2} hAlign="end">
+              <Button label="Cancel" variant="secondary" onClick={onClose} />
+              <Button label={epic ? "Save" : "Create"} variant="primary" isLoading={saving} isDisabled={!title.trim()} clickAction={handleSubmit} />
+            </HStack>
+          </LayoutFooter>
+        }
+      />
     </Dialog>
   );
 }

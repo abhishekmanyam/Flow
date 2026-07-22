@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverAnchor } from "@/components/ui/popover";
-import { Command, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
+import { TextArea } from "@astryxdesign/core/TextArea";
+import { Popover } from "@astryxdesign/core/Popover";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Avatar } from "@astryxdesign/core/Avatar";
 import type { WorkspaceMember } from "@/lib/types";
 
 interface MentionInputProps {
@@ -13,32 +14,28 @@ interface MentionInputProps {
   className?: string;
 }
 
-export default function MentionInput({ value, onChange, onKeyDown, members, placeholder, className }: MentionInputProps) {
+export default function MentionInput({ value, onChange, onKeyDown, members, placeholder }: MentionInputProps) {
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionStart, setMentionStart] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const filteredMembers = members.filter((m) => {
     const name = m.profile?.name ?? "";
     return name.toLowerCase().includes(mentionQuery.toLowerCase());
   });
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+  const handleInputChange = (val: string, e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange(val);
 
     const cursorPos = e.target.selectionStart ?? val.length;
-    // Find the last @ before cursor
     const beforeCursor = val.slice(0, cursorPos);
     const lastAt = beforeCursor.lastIndexOf("@");
 
     if (lastAt !== -1) {
-      // Check that @ is at start or preceded by whitespace
       const charBefore = lastAt > 0 ? beforeCursor[lastAt - 1] : " ";
       if (charBefore === " " || lastAt === 0) {
         const query = beforeCursor.slice(lastAt + 1);
-        // Only show if no space after @ (user is still typing the name)
         if (!query.includes(" ") || query.length <= 20) {
           setMentionQuery(query);
           setMentionStart(lastAt);
@@ -58,7 +55,6 @@ export default function MentionInput({ value, onChange, onKeyDown, members, plac
     const newValue = `${before}@${name} ${after}`;
     onChange(newValue);
     setMentionOpen(false);
-    // Refocus input
     setTimeout(() => {
       inputRef.current?.focus();
       const pos = before.length + name.length + 2;
@@ -66,7 +62,19 @@ export default function MentionInput({ value, onChange, onKeyDown, members, plac
     }, 0);
   };
 
-  // Close on escape
+  // Forward the host's onKeyDown (e.g. Enter-to-send) from the textarea element.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || !onKeyDown) return;
+    const handler = (e: KeyboardEvent) => {
+      if (mentionOpen && (e.key === "Escape" || e.key === "Enter")) return;
+      onKeyDown(e as unknown as React.KeyboardEvent<HTMLInputElement>);
+    };
+    el.addEventListener("keydown", handler);
+    return () => el.removeEventListener("keydown", handler);
+  }, [onKeyDown, mentionOpen]);
+
+  // Close suggestions on escape.
   useEffect(() => {
     if (!mentionOpen) return;
     const handler = (e: KeyboardEvent) => {
@@ -77,33 +85,37 @@ export default function MentionInput({ value, onChange, onKeyDown, members, plac
   }, [mentionOpen]);
 
   return (
-    <Popover open={mentionOpen && filteredMembers.length > 0} onOpenChange={setMentionOpen}>
-      <PopoverAnchor asChild>
-        <Input
-          ref={inputRef}
-          placeholder={placeholder}
-          value={value}
-          onChange={handleInputChange}
-          onKeyDown={onKeyDown}
-          className={className}
-        />
-      </PopoverAnchor>
-      <PopoverContent className="p-0 w-56" align="start" side="top" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <Command>
-          <CommandList>
-            <CommandEmpty>No members found</CommandEmpty>
+    <>
+      <TextArea
+        ref={inputRef}
+        label="Comment"
+        isLabelHidden
+        placeholder={placeholder}
+        value={value}
+        onChange={handleInputChange}
+        rows={2}
+      />
+      <Popover
+        anchorRef={inputRef as React.RefObject<HTMLElement>}
+        content={
+          <List density="compact" hasDividers>
             {filteredMembers.map((m) => (
-              <CommandItem
+              <ListItem
                 key={m.userId}
-                onSelect={() => selectMember(m.profile?.name ?? "Unknown")}
-                className="cursor-pointer"
-              >
-                {m.profile?.name ?? "Unknown"}
-              </CommandItem>
+                label={m.profile?.name ?? "Unknown"}
+                startContent={<Avatar size="xsmall" name={m.profile?.name ?? undefined} src={m.profile?.avatarUrl ?? undefined} />}
+                onClick={() => selectMember(m.profile?.name ?? "Unknown")}
+              />
             ))}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+          </List>
+        }
+        isOpen={mentionOpen && filteredMembers.length > 0}
+        onOpenChange={setMentionOpen}
+        placement="above"
+        alignment="start"
+        hasAutoFocus={false}
+        width={224}
+      />
+    </>
   );
 }

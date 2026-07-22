@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getCalendarICS = exports.autoClockOut = exports.checkTimesheetAccess = void 0;
+exports.submitEnrollment = exports.submitCampRegistration = exports.getCalendarICS = exports.autoClockOut = exports.checkTimesheetAccess = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const app_1 = require("firebase-admin/app");
@@ -173,6 +173,190 @@ exports.getCalendarICS = (0, https_1.onRequest)({ cors: true, invoker: "public" 
     catch (err) {
         console.error("getCalendarICS error:", err);
         res.status(500).send("Internal server error");
+    }
+});
+/**
+ * Public HTTPS endpoint for summer camp registrations submitted from the
+ * AIR Kids marketing website. Writes to:
+ *   workspaces/{CAMP_WORKSPACE_ID}/camp_registrations/{autoId}
+ *
+ * Set the target workspace via env var CAMP_WORKSPACE_ID before deploy:
+ *   firebase functions:secrets:set CAMP_WORKSPACE_ID
+ *   (or just an environment variable on the function)
+ */
+const ALLOWED_MONTHS = new Set(["June", "July", "August"]);
+function isNonEmptyString(v) {
+    return typeof v === "string" && v.trim().length > 0;
+}
+exports.submitCampRegistration = (0, https_1.onRequest)({ cors: true, invoker: "public" }, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).json({ error: "Method not allowed" });
+        return;
+    }
+    const wsId = process.env.CAMP_WORKSPACE_ID;
+    if (!wsId) {
+        console.error("CAMP_WORKSPACE_ID env var is not set");
+        res.status(500).json({ error: "Server misconfigured" });
+        return;
+    }
+    const body = (req.body ?? {});
+    const childName = body.childName;
+    const childAgeRaw = body.childAge;
+    const parentName = body.parentName;
+    const parentEmail = body.parentEmail;
+    const parentPhone = body.parentPhone;
+    const sessionMonth = body.sessionMonth;
+    const sessionDates = body.sessionDates;
+    const notes = typeof body.notes === "string" ? body.notes.trim() : "";
+    if (!isNonEmptyString(childName) ||
+        !isNonEmptyString(parentName) ||
+        !isNonEmptyString(parentEmail) ||
+        !isNonEmptyString(parentPhone) ||
+        !isNonEmptyString(sessionMonth) ||
+        !isNonEmptyString(sessionDates)) {
+        res.status(400).json({ error: "Missing required fields" });
+        return;
+    }
+    if (childName.trim().length < 2 || childName.length > 80) {
+        res.status(400).json({ error: "Invalid child name" });
+        return;
+    }
+    if (parentName.trim().length < 2 || parentName.length > 80) {
+        res.status(400).json({ error: "Invalid parent name" });
+        return;
+    }
+    const childAge = typeof childAgeRaw === "number"
+        ? childAgeRaw
+        : parseInt(String(childAgeRaw), 10);
+    if (!Number.isFinite(childAge) || childAge < 6 || childAge > 12) {
+        res.status(400).json({ error: "Child age must be between 6 and 12" });
+        return;
+    }
+    if (!ALLOWED_MONTHS.has(sessionMonth)) {
+        res.status(400).json({ error: "Invalid session month" });
+        return;
+    }
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parentEmail.trim());
+    if (!emailOk) {
+        res.status(400).json({ error: "Invalid email" });
+        return;
+    }
+    const phoneDigits = parentPhone.replace(/\D/g, "");
+    if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+        res.status(400).json({ error: "Phone must be a 10-digit US number" });
+        return;
+    }
+    if (notes.length > 500) {
+        res.status(400).json({ error: "Notes too long (max 500 chars)" });
+        return;
+    }
+    try {
+        const ref = db.collection(`workspaces/${wsId}/camp_registrations`).doc();
+        await ref.set({
+            childName: childName.trim(),
+            childAge,
+            parentName: parentName.trim(),
+            parentEmail: parentEmail.trim().toLowerCase(),
+            parentPhone: phoneDigits,
+            sessionMonth,
+            sessionDates,
+            notes,
+            status: "new",
+            source: "airwebsite",
+            createdAt: firestore_1.Timestamp.now(),
+        });
+        res.status(200).json({ ok: true, id: ref.id });
+    }
+    catch (err) {
+        console.error("submitCampRegistration error:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+/**
+ * Public HTTPS endpoint for year-round enrollment inquiries from the AIR Kids
+ * marketing website. Writes to:
+ *   workspaces/{CAMP_WORKSPACE_ID}/enrollments/{autoId}
+ */
+const ALLOWED_PLANS = new Set(["explorer", "innovator", "visionary"]);
+exports.submitEnrollment = (0, https_1.onRequest)({ cors: true, invoker: "public" }, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).json({ error: "Method not allowed" });
+        return;
+    }
+    const wsId = process.env.CAMP_WORKSPACE_ID;
+    if (!wsId) {
+        console.error("CAMP_WORKSPACE_ID env var is not set");
+        res.status(500).json({ error: "Server misconfigured" });
+        return;
+    }
+    const body = (req.body ?? {});
+    const childName = body.childName;
+    const childAgeRaw = body.childAge;
+    const parentName = body.parentName;
+    const parentEmail = body.parentEmail;
+    const parentPhone = body.parentPhone;
+    const plan = body.plan;
+    const notes = typeof body.notes === "string" ? body.notes.trim() : "";
+    if (!isNonEmptyString(childName) ||
+        !isNonEmptyString(parentName) ||
+        !isNonEmptyString(parentEmail) ||
+        !isNonEmptyString(parentPhone) ||
+        !isNonEmptyString(plan)) {
+        res.status(400).json({ error: "Missing required fields" });
+        return;
+    }
+    if (childName.trim().length < 2 || childName.length > 80) {
+        res.status(400).json({ error: "Invalid child name" });
+        return;
+    }
+    if (parentName.trim().length < 2 || parentName.length > 80) {
+        res.status(400).json({ error: "Invalid parent name" });
+        return;
+    }
+    const childAge = typeof childAgeRaw === "number"
+        ? childAgeRaw
+        : parseInt(String(childAgeRaw), 10);
+    if (!Number.isFinite(childAge) || childAge < 4 || childAge > 18) {
+        res.status(400).json({ error: "Invalid child age" });
+        return;
+    }
+    if (!ALLOWED_PLANS.has(plan)) {
+        res.status(400).json({ error: "Invalid plan" });
+        return;
+    }
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parentEmail.trim());
+    if (!emailOk) {
+        res.status(400).json({ error: "Invalid email" });
+        return;
+    }
+    const phoneDigits = parentPhone.replace(/\D/g, "");
+    if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+        res.status(400).json({ error: "Phone must be a 10-digit US number" });
+        return;
+    }
+    if (notes.length > 500) {
+        res.status(400).json({ error: "Notes too long (max 500 chars)" });
+        return;
+    }
+    try {
+        const ref = db.collection(`workspaces/${wsId}/enrollments`).doc();
+        await ref.set({
+            childName: childName.trim(),
+            childAge,
+            parentName: parentName.trim(),
+            parentEmail: parentEmail.trim().toLowerCase(),
+            parentPhone: phoneDigits,
+            plan,
+            notes,
+            status: "new",
+            source: "airwebsite",
+            createdAt: firestore_1.Timestamp.now(),
+        });
+        res.status(200).json({ ok: true, id: ref.id });
+    }
+    catch (err) {
+        console.error("submitEnrollment error:", err);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 //# sourceMappingURL=index.js.map

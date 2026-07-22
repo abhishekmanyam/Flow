@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { useProjectAccess } from "@/hooks/useProjectAccess";
-import { MotionPage } from "@/components/ui/motion-page";
 import {
   subscribeToTasks, subscribeToSprints, subscribeToLabels, subscribeToEpics,
   getWorkspaceMembers, getProjectMembers, projectDoc, taskDoc,
@@ -23,25 +22,41 @@ import CreateSprintDialog from "@/components/sprints/CreateSprintDialog";
 import CompleteSprintDialog from "@/components/sprints/CompleteSprintDialog";
 import TaskDetailSheet from "@/components/tasks/TaskDetailSheet";
 import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
+import { Layout, LayoutContent } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Token } from "@astryxdesign/core/Token";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
+import { Card } from "@astryxdesign/core/Card";
+import { Section } from "@astryxdesign/core/Section";
+import { Divider } from "@astryxdesign/core/Divider";
+import { DateInput } from "@astryxdesign/core/DateInput";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { Banner } from "@astryxdesign/core/Banner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { toast } from "@/components/system/toast";
 import { format, isPast, isToday } from "date-fns";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Plus, ChevronRight, Play, CheckCircle2, MoreHorizontal, Trash2, Inbox, Copy, GripVertical, Pencil } from "lucide-react";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { Plus, ChevronRight, Play, CheckCircle2, Inbox, GripVertical, Pencil } from "lucide-react";
 import PriorityIcon from "@/components/tasks/PriorityIcon";
 import EpicBadge from "@/components/epics/EpicBadge";
 import { buildTaskIdentifiers } from "@/lib/task-utils";
-import { STATUS_DOT_COLORS } from "@/lib/types";
 import type { Task, Project, WorkspaceMember, Label, Epic, Sprint, TaskStatus } from "@/lib/types";
+
+const STATUS_DOT_VARIANT: Record<TaskStatus, "neutral" | "accent" | "warning" | "success" | "error"> = {
+  backlog: "neutral",
+  todo: "neutral",
+  in_progress: "accent",
+  in_review: "warning",
+  done: "success",
+};
 
 export default function BacklogPage() {
   const { slug, projectId } = useParams<{ slug: string; projectId: string }>();
@@ -170,7 +185,6 @@ export default function BacklogPage() {
   const handleDeleteSprint = async (sprint: Sprint) => {
     if (!workspace || !projectId) return;
     const sprintTasks = tasksBySprint.get(sprint.id) ?? [];
-    // Move tasks to backlog before deleting
     try {
       const actorName = user!.displayName ?? "Someone";
       for (const task of sprintTasks) {
@@ -205,12 +219,10 @@ export default function BacklogPage() {
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    // Determine which list the active task belongs to
     const activeTask = tasks.find((t) => t.id === activeId);
     const overTask = tasks.find((t) => t.id === overId);
     if (!activeTask || !overTask) return;
 
-    // Only reorder within the same section (same sprintId)
     if (activeTask.sprintId !== overTask.sprintId) return;
 
     const sectionTasks = (activeTask.sprintId
@@ -224,14 +236,12 @@ export default function BacklogPage() {
 
     const reordered = arrayMove(sectionTasks, oldIdx, newIdx);
 
-    // Optimistic update
     const updatedPositions = reordered.map((t, i) => ({ ...t, position: i }));
     setTasks((prev) => {
       const otherTasks = prev.filter((t) => t.sprintId !== activeTask.sprintId || (activeTask.sprintId === null && t.sprintId !== null));
       return [...otherTasks, ...updatedPositions];
     });
 
-    // Persist
     await Promise.all(
       updatedPositions.map((t, i) =>
         updateDoc(taskDoc(workspace.id, projectId, t.id), { position: i, updatedAt: serverTimestamp() })
@@ -239,28 +249,35 @@ export default function BacklogPage() {
     );
   };
 
-  if (accessLoading || !workspace || !user) return (
-    <div className="p-6 space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+  if (accessLoading || !workspace || !user) {
+    return (
+      <Layout>
+        <LayoutContent padding={4}>
+          <VStack gap={3}><Skeleton height={28} width={220} /><Skeleton height={320} /></VStack>
+        </LayoutContent>
+      </Layout>
+    );
+  }
 
-  if (!hasAccess) return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center space-y-2">
-        <h2 className="text-lg font-semibold">Access Denied</h2>
-        <p className="text-sm text-muted-foreground">You don&apos;t have access to this project.</p>
-      </div>
-    </div>
-  );
+  if (!hasAccess) {
+    return (
+      <Layout>
+        <LayoutContent padding={4}>
+          <Banner status="error" title="Access denied" description="You don't have access to this project." />
+        </LayoutContent>
+      </Layout>
+    );
+  }
 
-  if (!project) return (
-    <div className="p-6 space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
+  if (!project) {
+    return (
+      <Layout>
+        <LayoutContent padding={4}>
+          <VStack gap={3}><Skeleton height={28} width={220} /><Skeleton height={320} /></VStack>
+        </LayoutContent>
+      </Layout>
+    );
+  }
 
   const memberMap = new Map<string, string>();
   const memberAvatarMap = new Map<string, string | undefined>();
@@ -269,15 +286,13 @@ export default function BacklogPage() {
     memberAvatarMap.set(m.userId, m.profile?.avatarUrl ?? undefined);
   });
 
-  const getInitials = (name: string) => name.split(/\s/).map((s) => s[0]?.toUpperCase()).slice(0, 2).join("");
-
   const tsToDate = (ts: unknown): Date | null => {
     if (!ts) return null;
     if (typeof (ts as { toDate?: () => Date }).toDate === "function") return (ts as { toDate: () => Date }).toDate();
     return new Date(ts as string);
   };
 
-  const renderTaskRowContent = (task: Task, currentSprintId: string | null, dragHandleProps?: Record<string, unknown>) => {
+  const renderTaskRowContent = (task: Task, currentSprintId: string | null, listeners?: Record<string, unknown>) => {
     const dueDate = tsToDate(task.dueDate);
     const isOverdue = dueDate && isPast(dueDate) && task.status !== "done";
     const isDueToday = dueDate && isToday(dueDate);
@@ -286,102 +301,58 @@ export default function BacklogPage() {
     const epic = task.epicId ? epicMap.get(task.epicId) : null;
     const identifier = taskIdentifiers.get(task.id);
 
+    const menuItems = [
+      ...(activeSprint && currentSprintId !== activeSprint.id ? [{ label: `Move to ${activeSprint.name}`, onClick: () => moveTaskToSprint(task.id, activeSprint.id) }] : []),
+      ...planningSprints.filter((s) => s.id !== currentSprintId).map((s) => ({ label: `Move to ${s.name}`, onClick: () => moveTaskToSprint(task.id, s.id) })),
+      ...(currentSprintId ? [{ label: "Move to Backlog", onClick: () => moveTaskToSprint(task.id, null) }] : []),
+      { label: "Duplicate", onClick: () => handleDuplicate(task) },
+      ...(isProjectAdmin ? [{ type: "divider" as const }, { label: "Delete", onClick: () => handleSoftDelete(task.id) }] : []),
+    ];
+
     return (
       <>
-        {canEdit && dragHandleProps && (
-          <button className="shrink-0 cursor-grab active:cursor-grabbing touch-none" {...dragHandleProps} onClick={(e) => e.stopPropagation()}>
-            <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
+        {canEdit && listeners && (
+          <HStack {...listeners} align="center" aria-label="Drag task" onClick={(e) => e.stopPropagation()}>
+            <GripVertical size={14} />
+          </HStack>
         )}
-        <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT_COLORS[task.status])} />
-        {identifier && (
-          <span className="font-mono text-[11px] text-muted-foreground shrink-0">{identifier}</span>
-        )}
-        <span className="text-sm font-medium truncate flex-1">{task.title}</span>
-        {epic && (
-          <EpicBadge title={epic.title} color={epic.color} className="text-[10px] px-1.5 py-0 shrink-0 max-w-[100px] truncate" />
-        )}
+        <StatusDot variant={STATUS_DOT_VARIANT[task.status]} label={task.status} />
+        {identifier && <Text type="code" color="secondary">{identifier}</Text>}
+        <HStack width="100%" align="center" gap={2}>
+          <Text type="body" weight="medium" maxLines={1}>{task.title}</Text>
+          {epic && <EpicBadge title={epic.title} color={epic.color} />}
+        </HStack>
         {dueDate && (
-          <span className={cn("text-[11px] px-1.5 py-0.5 rounded shrink-0",
-            isOverdue ? "bg-destructive/10 text-destructive" : isDueToday ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" : "text-muted-foreground")}>
-            {format(dueDate, "MMM d")}
-          </span>
+          isOverdue || isDueToday
+            ? <Token label={format(dueDate, "MMM d")} size="sm" color={isOverdue ? "red" : "orange"} />
+            : <Text type="supporting" color="secondary">{format(dueDate, "MMM d")}</Text>
         )}
         {task.storyPoints != null && task.storyPoints > 0 && (
-          <span className="font-mono text-[11px] text-muted-foreground shrink-0">{task.storyPoints}SP</span>
+          <Text type="code" color="secondary">{task.storyPoints}SP</Text>
         )}
-        <PriorityIcon priority={task.priority} className="h-3.5 w-3.5 shrink-0" />
-        {assigneeName ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Avatar className="h-5 w-5 shrink-0">
-                <AvatarImage src={assigneeAvatar} />
-                <AvatarFallback className="text-[9px]">{getInitials(assigneeName)}</AvatarFallback>
-              </Avatar>
-            </TooltipTrigger>
-            <TooltipContent side="top"><p className="text-xs">{assigneeName}</p></TooltipContent>
-          </Tooltip>
-        ) : null}
-        {canEdit && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              {activeSprint && currentSprintId !== activeSprint.id && (
-                <DropdownMenuItem onClick={() => moveTaskToSprint(task.id, activeSprint.id)}>
-                  Move to {activeSprint.name}
-                </DropdownMenuItem>
-              )}
-              {planningSprints.filter((s) => s.id !== currentSprintId).map((s) => (
-                <DropdownMenuItem key={s.id} onClick={() => moveTaskToSprint(task.id, s.id)}>
-                  Move to {s.name}
-                </DropdownMenuItem>
-              ))}
-              {currentSprintId && (
-                <DropdownMenuItem onClick={() => moveTaskToSprint(task.id, null)}>
-                  Move to Backlog
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => handleDuplicate(task)}>
-                <Copy className="mr-2 h-3.5 w-3.5" />Duplicate
-              </DropdownMenuItem>
-              {isProjectAdmin && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleSoftDelete(task.id)}>
-                    <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        <PriorityIcon priority={task.priority} />
+        {assigneeName && <Avatar size="xsmall" src={assigneeAvatar} name={assigneeName} />}
+        {canEdit && <MoreMenu label="Task actions" size="sm" items={menuItems} />}
       </>
     );
   };
 
   const SortableTaskRow = ({ task, currentSprintId }: { task: Task; currentSprintId: string | null }) => {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
-    const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
-    const dueDate = tsToDate(task.dueDate);
-    const isOverdue = dueDate && isPast(dueDate) && task.status !== "done";
-
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: task.id });
+    const dndStyle = { transform: CSS.Transform.toString(transform), transition };
     return (
-      <div
+      <HStack
         ref={setNodeRef}
-        style={style}
+        style={dndStyle}
         {...attributes}
-        className={cn(
-          "flex items-center gap-2.5 px-3 py-2 border rounded-md hover:bg-accent/50 cursor-pointer transition-colors",
-          isOverdue && "border-destructive/30 bg-destructive/5",
-        )}
+        gap={2}
+        align="center"
+        paddingInline={4}
+        paddingBlock={2}
         onClick={() => setSelectedTaskId(task.id)}
       >
         {renderTaskRowContent(task, currentSprintId, listeners)}
-      </div>
+      </HStack>
     );
   };
 
@@ -389,22 +360,33 @@ export default function BacklogPage() {
     const sprintTasks = tasksBySprint.get(sprint.id) ?? [];
     const isCollapsed = collapsedSprints.has(sprint.id);
     const isStarting = startingSprintId === sprint.id;
+    const sprintMenuItems = [
+      { label: "Edit sprint", onClick: () => setEditingSprint(sprint) },
+      ...(sprint.status === "planning" ? [{ label: "Delete sprint", onClick: () => handleDeleteSprint(sprint) }] : []),
+    ];
 
     return (
-      <Collapsible key={sprint.id} open={!isCollapsed} onOpenChange={() => toggleCollapse(sprint.id)}>
-        <div className="border rounded-lg">
-          <div className="flex items-start gap-3 p-4">
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 mt-0.5">
-                <ChevronRight className={cn("h-4 w-4 transition-transform", !isCollapsed && "rotate-90")} />
-              </Button>
-            </CollapsibleTrigger>
-            <div className="flex-1 min-w-0">
-              <SprintHeader sprint={sprint} tasks={sprintTasks} />
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {isProjectAdmin && sprint.status === "planning" && !activeSprint && (
-                <Button size="sm" variant="outline" onClick={() => {
+      <VStack key={sprint.id} gap={0}>
+        <Section variant="muted" padding={0} dividers={["bottom"]}>
+        <HStack gap={2} align="start" paddingInline={4} paddingBlock={3}>
+          <IconButton
+            label={isCollapsed ? "Expand sprint" : "Collapse sprint"}
+            variant="ghost"
+            size="sm"
+            icon={<ChevronRight size={16} />}
+            onClick={() => toggleCollapse(sprint.id)}
+          />
+          <VStack width="100%">
+            <SprintHeader sprint={sprint} tasks={sprintTasks} />
+          </VStack>
+          <HStack gap={1} align="center">
+            {isProjectAdmin && sprint.status === "planning" && !activeSprint && (
+              <Button
+                label="Start"
+                variant="secondary"
+                size="sm"
+                icon={<Play size={14} />}
+                onClick={() => {
                   setStartingSprintId(isStarting ? null : sprint.id);
                   if (!isStarting) {
                     const today = new Date();
@@ -415,217 +397,190 @@ export default function BacklogPage() {
                       endDate: twoWeeks.toISOString().split("T")[0],
                     });
                   }
-                }}>
-                  <Play className="mr-1 h-3.5 w-3.5" />Start
-                </Button>
-              )}
-              {isProjectAdmin && sprint.status === "active" && (
-                <Button size="sm" variant="outline" onClick={() => setCompletingSprint(sprint)}>
-                  <CheckCircle2 className="mr-1 h-3.5 w-3.5" />Complete
-                </Button>
-              )}
-              {canEdit && (
-                <Button size="sm" variant="ghost" onClick={() => setCreateStatus({ status: "todo", sprintId: sprint.id })}>
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {isProjectAdmin && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7">
-                      <MoreHorizontal className="h-3.5 w-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setEditingSprint(sprint)}>
-                      <Pencil className="mr-2 h-3.5 w-3.5" />Edit sprint
-                    </DropdownMenuItem>
-                    {sprint.status === "planning" && (
-                      <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteSprint(sprint)}>
-                        <Trash2 className="mr-2 h-3.5 w-3.5" />Delete sprint
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </div>
-          </div>
-          {isStarting && (
-            <div className="px-4 pb-3 flex items-end gap-3 border-t pt-3 mx-4">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Start date</label>
-                <input
-                  type="date"
-                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                  value={sprintDateInputs.startDate}
-                  onChange={(e) => setSprintDateInputs((p) => ({ ...p, startDate: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">End date</label>
-                <input
-                  type="date"
-                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                  value={sprintDateInputs.endDate}
-                  onChange={(e) => setSprintDateInputs((p) => ({ ...p, endDate: e.target.value }))}
-                />
-              </div>
-              <Button size="sm" onClick={() => handleStartSprint(sprint.id)}>
-                Start sprint
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setStartingSprintId(null)}>
-                Cancel
-              </Button>
-            </div>
-          )}
-          <CollapsibleContent>
-            <div className="px-4 pb-4 space-y-1">
-              {sprintTasks.length === 0 ? (
-                <EmptyState icon={Inbox} title="Sprint is empty" description="Add tasks from the backlog or create new ones" className="py-6" />
-              ) : (
-                <SortableContext items={sprintTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                  <div className="space-y-1">
-                    {sprintTasks.map((task) => (
-                      <SortableTaskRow key={task.id} task={task} currentSprintId={sprint.id} />
-                    ))}
-                  </div>
-                </SortableContext>
-              )}
-            </div>
-          </CollapsibleContent>
-        </div>
-      </Collapsible>
+                }}
+              />
+            )}
+            {isProjectAdmin && sprint.status === "active" && (
+              <Button label="Complete" variant="secondary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setCompletingSprint(sprint)} />
+            )}
+            {canEdit && (
+              <IconButton label="Add task to sprint" variant="ghost" size="sm" icon={<Plus size={16} />} onClick={() => setCreateStatus({ status: "todo", sprintId: sprint.id })} />
+            )}
+            {isProjectAdmin && (
+              <MoreMenu
+                label="Sprint actions"
+                size="sm"
+                items={sprintMenuItems}
+                icon={<Pencil size={14} />}
+              />
+            )}
+          </HStack>
+        </HStack>
+        </Section>
+
+        {isStarting && (
+          <Section variant="muted" padding={0} dividers={["bottom"]}>
+            <HStack gap={3} align="end" paddingInline={4} paddingBlock={3} wrap="wrap">
+              <DateInput label="Start date" value={(sprintDateInputs.startDate || undefined) as ISODateString | undefined} onChange={(v) => setSprintDateInputs((p) => ({ ...p, startDate: v ?? "" }))} />
+              <DateInput label="End date" value={(sprintDateInputs.endDate || undefined) as ISODateString | undefined} onChange={(v) => setSprintDateInputs((p) => ({ ...p, endDate: v ?? "" }))} />
+              <Button label="Start sprint" variant="primary" size="sm" onClick={() => handleStartSprint(sprint.id)} />
+              <Button label="Cancel" variant="ghost" size="sm" onClick={() => setStartingSprintId(null)} />
+            </HStack>
+          </Section>
+        )}
+
+        {!isCollapsed && (
+          sprintTasks.length === 0 ? (
+            <EmptyState icon={<Inbox size={24} />} title="Sprint is empty" description="Add tasks from the backlog or create new ones" isCompact />
+          ) : (
+            <SortableContext items={sprintTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+              <VStack gap={0}>
+                {sprintTasks.map((task) => (
+                  <VStack gap={0} key={task.id}>
+                    <SortableTaskRow task={task} currentSprintId={sprint.id} />
+                    <Divider />
+                  </VStack>
+                ))}
+              </VStack>
+            </SortableContext>
+          )
+        )}
+      </VStack>
     );
   };
 
   return (
-    <MotionPage className="flex flex-col h-full">
-      <ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} />
+    <>
+    <Layout
+      header={<ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} />}
+      content={
+        <LayoutContent padding={0}>
+          <DndContext sensors={canEdit ? sensors : undefined} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <VStack gap={0}>
+              {activeSprint && renderSprintSection(activeSprint)}
+              {planningSprints.map((sprint) => renderSprintSection(sprint))}
 
-      <DndContext sensors={canEdit ? sensors : undefined} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex-1 overflow-auto p-6 space-y-6">
-          {/* Active Sprint */}
-          {activeSprint && renderSprintSection(activeSprint)}
-
-          {/* Planning Sprints */}
-          {planningSprints.map((sprint) => renderSprintSection(sprint))}
-
-          {/* Create Sprint */}
-          {isProjectAdmin && (
-            <Button variant="outline" size="sm" onClick={() => setShowCreateSprint(true)}>
-              <Plus className="mr-1.5 h-4 w-4" />Create sprint
-            </Button>
-          )}
-
-          {/* Backlog */}
-          <div className="border rounded-lg">
-            <div className="flex items-center gap-3 p-4">
-              <h3 className="font-semibold text-sm">Backlog</h3>
-              <Badge variant="secondary" className="text-[10px]">{backlogTasks.length}</Badge>
-              {canEdit && (
-                <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setCreateStatus({ status: "backlog", sprintId: null })}>
-                  <Plus className="mr-1 h-3.5 w-3.5" />Add task
-                </Button>
+              {isProjectAdmin && (
+                <HStack paddingInline={4} paddingBlock={3}>
+                  <Button label="Create sprint" variant="secondary" size="sm" icon={<Plus size={16} />} onClick={() => setShowCreateSprint(true)} />
+                </HStack>
               )}
-            </div>
-            <div className="px-4 pb-4 space-y-1">
-              {backlogTasks.length === 0 ? (
-                <EmptyState icon={Inbox} title="Backlog is empty" description="Tasks without a sprint will appear here" className="py-6" />
-              ) : (
-                <SortableContext items={backlogTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                  <div className="space-y-1">
-                    {backlogTasks.map((task) => (
-                      <SortableTaskRow key={task.id} task={task} currentSprintId={null} />
-                    ))}
-                  </div>
-                </SortableContext>
+
+              <VStack gap={0}>
+                <Section variant="muted" padding={0} dividers={["bottom"]}>
+                  <HStack gap={2} align="center" paddingInline={4} paddingBlock={3}>
+                    <Heading level={3}>Backlog</Heading>
+                    <Badge variant="neutral" label={String(backlogTasks.length)} />
+                    {canEdit && (
+                      <HStack justify="end" width="100%">
+                        <Button label="Add task" variant="ghost" size="sm" icon={<Plus size={16} />} onClick={() => setCreateStatus({ status: "backlog", sprintId: null })} />
+                      </HStack>
+                    )}
+                  </HStack>
+                </Section>
+                {backlogTasks.length === 0 ? (
+                  <EmptyState icon={<Inbox size={24} />} title="Backlog is empty" description="Tasks without a sprint will appear here" isCompact />
+                ) : (
+                  <SortableContext items={backlogTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                    <VStack gap={0}>
+                      {backlogTasks.map((task) => (
+                        <VStack gap={0} key={task.id}>
+                          <SortableTaskRow task={task} currentSprintId={null} />
+                          <Divider />
+                        </VStack>
+                      ))}
+                    </VStack>
+                  </SortableContext>
+                )}
+              </VStack>
+            </VStack>
+
+            <DragOverlay>
+              {activeDragTask && (
+                <Card padding={2}>
+                  <HStack gap={2} align="center">
+                    {renderTaskRowContent(activeDragTask, activeDragTask.sprintId)}
+                  </HStack>
+                </Card>
               )}
-            </div>
-          </div>
-        </div>
+            </DragOverlay>
+          </DndContext>
+        </LayoutContent>
+      }
+    />
 
-        <DragOverlay>
-          {activeDragTask && (
-            <div className="flex items-center gap-2.5 px-3 py-2 border rounded-md bg-background shadow-lg">
-              {renderTaskRowContent(activeDragTask, activeDragTask.sprintId)}
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
-
-      {/* Dialogs */}
-      {showCreateSprint && (
-        <CreateSprintDialog
-          open
-          workspaceId={workspace.id}
-          projectId={projectId!}
-          currentUserId={user.uid}
-          nextPosition={sprints.length}
-          onCreated={(sprint) => { setSprints((prev) => [...prev, sprint]); setShowCreateSprint(false); }}
-          onClose={() => setShowCreateSprint(false)}
-        />
-      )}
-
-      {editingSprint && (
-        <CreateSprintDialog
-          open
-          sprint={editingSprint}
-          workspaceId={workspace.id}
-          projectId={projectId!}
-          currentUserId={user.uid}
-          nextPosition={sprints.length}
-          onCreated={(updated) => {
-            setSprints((prev) => prev.map((s) => s.id === updated.id ? updated : s));
-            setEditingSprint(null);
-          }}
-          onClose={() => setEditingSprint(null)}
-        />
-      )}
-
-      {createStatus && (
-        <CreateTaskDialog
-          open
-          defaultStatus={createStatus.status}
-          project={project}
-          members={members}
-          labels={labels}
-          epics={epics}
-          sprints={sprints}
-          defaultSprintId={createStatus.sprintId}
-          currentUserId={user.uid}
-          workspaceId={workspace.id}
-          onCreated={handleTaskCreated}
-          onClose={() => setCreateStatus(null)}
-        />
-      )}
-
-      {completingSprint && (
-        <CompleteSprintDialog
-          open
-          sprint={completingSprint}
-          incompleteTasks={(tasksBySprint.get(completingSprint.id) ?? []).filter((t) => t.status !== "done")}
-          otherSprints={planningSprints.filter((s) => s.id !== completingSprint.id)}
-          workspaceId={workspace.id}
-          projectId={projectId!}
-          onCompleted={() => setCompletingSprint(null)}
-          onClose={() => setCompletingSprint(null)}
-        />
-      )}
-
-      <TaskDetailSheet
-        taskId={selectedTaskId}
-        project={project}
+    {showCreateSprint && (
+      <CreateSprintDialog
+        open
         workspaceId={workspace.id}
+        projectId={projectId!}
+        currentUserId={user.uid}
+        nextPosition={sprints.length}
+        onCreated={(sprint) => { setSprints((prev) => [...prev, sprint]); setShowCreateSprint(false); }}
+        onClose={() => setShowCreateSprint(false)}
+      />
+    )}
+
+    {editingSprint && (
+      <CreateSprintDialog
+        open
+        sprint={editingSprint}
+        workspaceId={workspace.id}
+        projectId={projectId!}
+        currentUserId={user.uid}
+        nextPosition={sprints.length}
+        onCreated={(updated) => {
+          setSprints((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+          setEditingSprint(null);
+        }}
+        onClose={() => setEditingSprint(null)}
+      />
+    )}
+
+    {createStatus && (
+      <CreateTaskDialog
+        open
+        defaultStatus={createStatus.status}
+        project={project}
         members={members}
         labels={labels}
         epics={epics}
         sprints={sprints}
+        defaultSprintId={createStatus.sprintId}
         currentUserId={user.uid}
-        canEdit={canEdit}
-        isProjectAdmin={isProjectAdmin}
-        onClose={() => setSelectedTaskId(null)}
-        onUpdated={handleTaskUpdated}
+        workspaceId={workspace.id}
+        onCreated={handleTaskCreated}
+        onClose={() => setCreateStatus(null)}
       />
-    </MotionPage>
+    )}
+
+    {completingSprint && (
+      <CompleteSprintDialog
+        open
+        sprint={completingSprint}
+        incompleteTasks={(tasksBySprint.get(completingSprint.id) ?? []).filter((t) => t.status !== "done")}
+        otherSprints={planningSprints.filter((s) => s.id !== completingSprint.id)}
+        workspaceId={workspace.id}
+        projectId={projectId!}
+        onCompleted={() => setCompletingSprint(null)}
+        onClose={() => setCompletingSprint(null)}
+      />
+    )}
+
+    <TaskDetailSheet
+      taskId={selectedTaskId}
+      project={project}
+      workspaceId={workspace.id}
+      members={members}
+      labels={labels}
+      epics={epics}
+      sprints={sprints}
+      currentUserId={user.uid}
+      canEdit={canEdit}
+      isProjectAdmin={isProjectAdmin}
+      onClose={() => setSelectedTaskId(null)}
+      onUpdated={handleTaskUpdated}
+    />
+    </>
   );
 }

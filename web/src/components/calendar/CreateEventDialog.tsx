@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Timestamp } from "firebase/firestore";
-import { toast } from "sonner";
-import { Loader2, Globe, UserCheck, Repeat, CalendarCheck, CircleDashed } from "lucide-react";
+import { Globe, UserCheck, Repeat, CalendarCheck, CircleDashed } from "lucide-react";
+import { toast } from "@/components/system/toast";
 import type {
   CalendarEvent,
   EventCategory,
@@ -17,36 +17,67 @@ import {
   DEFAULT_REGISTRATION_FIELDS,
 } from "@/lib/types";
 import { createCalendarEvent, updateCalendarEvent } from "@/lib/firestore";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Text } from "@astryxdesign/core/Text";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Button } from "@astryxdesign/core/Button";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { TextArea } from "@astryxdesign/core/TextArea";
+import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
+import { DateInput } from "@astryxdesign/core/DateInput";
+import { TimeInput } from "@astryxdesign/core/TimeInput";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
+import type { ISOTimeString } from "@astryxdesign/core/TimeInput";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Token } from "@astryxdesign/core/Token";
+import type { SelectorOptionData } from "@astryxdesign/core/Selector";
 import RegistrationFormBuilder from "./RegistrationFormBuilder";
+
+type TokenColor =
+  | "default"
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "teal"
+  | "cyan"
+  | "blue"
+  | "purple"
+  | "pink"
+  | "gray";
+
+// Named + Astryx-token mapping for the fixed brand palette, so the color picker
+// is a real Astryx Selector (Token swatches) rather than raw hex chips, while
+// still storing the hex value the calendar / ICS export need.
+const COLOR_META: Record<string, { label: string; token: TokenColor }> = {
+  "#6366f1": { label: "Indigo", token: "blue" },
+  "#8b5cf6": { label: "Violet", token: "purple" },
+  "#ec4899": { label: "Pink", token: "pink" },
+  "#f97316": { label: "Orange", token: "orange" },
+  "#eab308": { label: "Yellow", token: "yellow" },
+  "#22c55e": { label: "Green", token: "green" },
+  "#14b8a6": { label: "Teal", token: "teal" },
+  "#3b82f6": { label: "Blue", token: "blue" },
+  "#ef4444": { label: "Red", token: "red" },
+  "#a855f7": { label: "Purple", token: "purple" },
+};
+
+const COLOR_OPTIONS = PROJECT_COLORS.map((c) => ({
+  value: c,
+  label: COLOR_META[c]?.label ?? c,
+}));
+
+const CATEGORY_OPTIONS = (
+  Object.entries(EVENT_CATEGORY_LABELS) as [EventCategory, string][]
+).map(([value, label]) => ({ value, label }));
+
+const REPEAT_OPTIONS = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+];
 
 const eventFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -75,10 +106,7 @@ type EventFormValues = z.infer<typeof eventFormSchema>;
 function toDate(val: unknown): Date {
   if (!val) return new Date();
   if (val instanceof Date) return val;
-  if (
-    typeof val === "object" &&
-    "toDate" in (val as Record<string, unknown>)
-  )
+  if (typeof val === "object" && "toDate" in (val as Record<string, unknown>))
     return (val as { toDate: () => Date }).toDate();
   return new Date(val as string);
 }
@@ -132,9 +160,7 @@ export default function CreateEventDialog({
       title: event?.title ?? "",
       description: event?.description ?? "",
       startDate: formatDateForInput(defaultStartDate),
-      startTime: event
-        ? formatTimeForInput(toDate(event.startDate))
-        : "09:00",
+      startTime: event ? formatTimeForInput(toDate(event.startDate)) : "09:00",
       endDate: formatDateForInput(defaultEndDate),
       endTime: event ? formatTimeForInput(toDate(event.endDate)) : "10:00",
       allDay: event?.allDay ?? false,
@@ -154,9 +180,7 @@ export default function CreateEventDialog({
       isPublic: event?.isPublic ?? false,
       registrationOpen: event?.registrationOpen ?? false,
       maxRegistrations:
-        event?.maxRegistrations != null
-          ? String(event.maxRegistrations)
-          : "",
+        event?.maxRegistrations != null ? String(event.maxRegistrations) : "",
     },
   });
 
@@ -164,7 +188,6 @@ export default function CreateEventDialog({
   const isRepeating = form.watch("isRepeating");
   const rsvpEnabled = form.watch("rsvpEnabled");
   const isPublic = form.watch("isPublic");
-  const selectedColor = form.watch("color");
 
   const handleSubmit = async (values: EventFormValues) => {
     setLoading(true);
@@ -198,7 +221,9 @@ export default function CreateEventDialog({
           category: values.category,
           color: values.color,
           isRepeating: values.isRepeating,
-          repeatingType: values.isRepeating ? values.repeatingType as RepeatingType : null,
+          repeatingType: values.isRepeating
+            ? (values.repeatingType as RepeatingType)
+            : null,
           repeatingEndDate:
             values.isRepeating && values.repeatingEndDate
               ? Timestamp.fromDate(new Date(`${values.repeatingEndDate}T23:59:59`))
@@ -227,7 +252,9 @@ export default function CreateEventDialog({
           category: values.category,
           color: values.color,
           isRepeating: values.isRepeating,
-          repeatingType: values.isRepeating ? values.repeatingType as RepeatingType : null,
+          repeatingType: values.isRepeating
+            ? (values.repeatingType as RepeatingType)
+            : null,
           repeatingEndDate:
             values.isRepeating && values.repeatingEndDate
               ? Timestamp.fromDate(new Date(`${values.repeatingEndDate}T23:59:59`))
@@ -259,486 +286,370 @@ export default function CreateEventDialog({
     }
   };
 
+  const renderColorOption = (option: SelectorOptionData) => (
+    <Token
+      label={option.label ?? option.value}
+      color={COLOR_META[option.value]?.token ?? "default"}
+      size="sm"
+    />
+  );
+
+  const sectionLabel = (label: string) => (
+    <VStack gap={2}>
+      <Divider />
+      <Text type="label" color="secondary" weight="semibold">
+        {label}
+      </Text>
+    </VStack>
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {isEditing ? "Edit Event" : "New Event"}
-          </DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? "Update the event details below."
-              : "Fill in the details to create a new event."}
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog isOpen={open} onOpenChange={onOpenChange} purpose="form" width={600}>
+      <DialogHeader
+        title={isEditing ? "Edit event" : "New event"}
+        subtitle={
+          isEditing
+            ? "Update the event details below."
+            : "Fill in the details to create a new event."
+        }
+        onOpenChange={onOpenChange}
+      />
 
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(handleSubmit)}
-            className="space-y-5"
-          >
-            {/* ── Basic Info ── */}
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Event title" {...field} autoFocus />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="What's this event about?"
-                      rows={3}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* ── Date & Time ── */}
-            <Separator />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Date & Time
-            </p>
-
-            <FormField
-              control={form.control}
-              name="allDay"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center gap-2 space-y-0">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormLabel className="font-normal">All day event</FormLabel>
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {!allDay && (
-                <FormField
-                  control={form.control}
-                  name="startTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start time</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>End date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {!allDay && (
-                <FormField
-                  control={form.control}
-                  name="endTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End time</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-            </div>
-
-            {/* ── Recurrence ── */}
-            <FormField
-              control={form.control}
-              name="isRepeating"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-lg border p-3">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={(checked) => {
-                        field.onChange(checked);
-                        if (!checked) form.setValue("repeatingType", null);
-                        else form.setValue("repeatingType", "weekly");
-                      }}
-                    />
-                  </FormControl>
-                  <div className="space-y-0.5">
-                    <FormLabel className="flex items-center gap-1.5">
-                      <Repeat className="h-3.5 w-3.5" />
-                      Recurring event
-                    </FormLabel>
-                    <p className="text-xs text-muted-foreground">
-                      This event repeats on a schedule
-                    </p>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            {isRepeating && (
-              <div className="space-y-3">
-                <FormField
-                  control={form.control}
-                  name="repeatingType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Repeat frequency</FormLabel>
-                      <Select
-                        value={field.value ?? "weekly"}
-                        onValueChange={field.onChange}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="repeatingEndDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Repeat until (optional)</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">
-                        Leave empty to repeat indefinitely
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            )}
-
-            {/* ── RSVP & Optional ── */}
-            <Separator />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              RSVP & Attendance
-            </p>
-
-            <FormField
-              control={form.control}
-              name="rsvpEnabled"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-lg border p-3">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-0.5">
-                    <FormLabel className="flex items-center gap-1.5">
-                      <CalendarCheck className="h-3.5 w-3.5" />
-                      Enable RSVP
-                    </FormLabel>
-                    <p className="text-xs text-muted-foreground">
-                      Allow members to accept, decline, or mark as tentative
-                    </p>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            {rsvpEnabled && (
-              <FormField
-                control={form.control}
-                name="rsvpDeadline"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>RSVP deadline (optional)</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">
-                      Leave empty for no deadline
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
+      <form onSubmit={form.handleSubmit(handleSubmit)}>
+        <VStack padding={4} gap={4}>
+          {/* Basic info */}
+          <Controller
+            control={form.control}
+            name="title"
+            render={({ field, fieldState }) => (
+              <TextInput
+                label="Title"
+                isRequired
+                placeholder="Event title"
+                value={field.value}
+                onChange={field.onChange}
+                status={
+                  fieldState.error
+                    ? { type: "error", message: fieldState.error.message }
+                    : undefined
+                }
               />
             )}
+          />
 
-            <FormField
-              control={form.control}
-              name="isOptional"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-lg border p-3">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-0.5">
-                    <FormLabel className="flex items-center gap-1.5">
-                      <CircleDashed className="h-3.5 w-3.5" />
-                      Optional event
-                    </FormLabel>
-                    <p className="text-xs text-muted-foreground">
-                      Shows as tentative in external calendars
-                    </p>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            {/* ── Details ── */}
-            <Separator />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Details
-            </p>
-
-            <FormField
-              control={form.control}
-              name="location"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Location</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Room, address, or meeting link"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {(
-                          Object.entries(EVENT_CATEGORY_LABELS) as [
-                            EventCategory,
-                            string,
-                          ][]
-                        ).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <Controller
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <TextArea
+                label="Description"
+                isOptional
+                rows={3}
+                placeholder="What's this event about?"
+                value={field.value ?? ""}
+                onChange={field.onChange}
               />
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="color"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Color</FormLabel>
-                    <FormControl>
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {PROJECT_COLORS.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            className={cn(
-                              "h-6 w-6 rounded-full transition-all",
-                              selectedColor === color
-                                ? "ring-2 ring-offset-2 ring-primary scale-110"
-                                : "hover:scale-110"
-                            )}
-                            style={{ backgroundColor: color }}
-                            onClick={() => field.onChange(color)}
-                          />
-                        ))}
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          {/* Date & time */}
+          {sectionLabel("Date & time")}
+
+          <Controller
+            control={form.control}
+            name="allDay"
+            render={({ field }) => (
+              <CheckboxInput
+                label="All day event"
+                value={field.value}
+                onChange={(checked) => field.onChange(checked)}
               />
-            </div>
+            )}
+          />
 
-            {/* ── Public & Registration ── */}
-            <Separator />
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Visibility & Registration
-            </p>
-
-            <FormField
+          <HStack gap={3} align="start">
+            <Controller
               control={form.control}
-              name="isPublic"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start gap-3 space-y-0 rounded-lg border p-3">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-0.5">
-                    <FormLabel className="flex items-center gap-1.5">
-                      <Globe className="h-3.5 w-3.5" />
-                      Public event
-                    </FormLabel>
-                    <p className="text-xs text-muted-foreground">
-                      Visible on the public calendar and accessible via link
-                    </p>
-                  </div>
-                </FormItem>
+              name="startDate"
+              render={({ field, fieldState }) => (
+                <DateInput
+                  label="Start date"
+                  value={field.value as ISODateString}
+                  onChange={(v) => field.onChange(v ?? "")}
+                  status={
+                    fieldState.error
+                      ? { type: "error", message: fieldState.error.message }
+                      : undefined
+                  }
+                />
               )}
             />
-
-            {isPublic && (
-              <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
-                <FormField
-                  control={form.control}
-                  name="registrationOpen"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start gap-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-0.5">
-                        <FormLabel className="flex items-center gap-1.5">
-                          <UserCheck className="h-3.5 w-3.5" />
-                          Accept registrations
-                        </FormLabel>
-                        <p className="text-xs text-muted-foreground">
-                          Allow visitors to register for this event
-                        </p>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="maxRegistrations"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Max registrations</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          placeholder="Leave empty for unlimited"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <FormLabel>Registration form fields</FormLabel>
-                  <p className="text-xs text-muted-foreground">
-                    Customize the information you collect from registrants
-                  </p>
-                  <RegistrationFormBuilder
-                    fields={registrationFields}
-                    onChange={setRegistrationFields}
+            {!allDay && (
+              <Controller
+                control={form.control}
+                name="startTime"
+                render={({ field }) => (
+                  <TimeInput
+                    label="Start time"
+                    value={(field.value ?? "") as ISOTimeString}
+                    onChange={(v) => field.onChange(v ?? "")}
                   />
-                </div>
-              </div>
-            )}
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {isEditing ? "Save changes" : "Create event"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
+              />
+            )}
+          </HStack>
+
+          <HStack gap={3} align="start">
+            <Controller
+              control={form.control}
+              name="endDate"
+              render={({ field, fieldState }) => (
+                <DateInput
+                  label="End date"
+                  value={field.value as ISODateString}
+                  onChange={(v) => field.onChange(v ?? "")}
+                  status={
+                    fieldState.error
+                      ? { type: "error", message: fieldState.error.message }
+                      : undefined
+                  }
+                />
+              )}
+            />
+            {!allDay && (
+              <Controller
+                control={form.control}
+                name="endTime"
+                render={({ field }) => (
+                  <TimeInput
+                    label="End time"
+                    value={(field.value ?? "") as ISOTimeString}
+                    onChange={(v) => field.onChange(v ?? "")}
+                  />
+                )}
+              />
+            )}
+          </HStack>
+
+          {/* Recurrence */}
+          <Controller
+            control={form.control}
+            name="isRepeating"
+            render={({ field }) => (
+              <CheckboxInput
+                label="Recurring event"
+                labelIcon={Repeat}
+                description="This event repeats on a schedule"
+                value={field.value}
+                onChange={(checked) => {
+                  field.onChange(checked);
+                  form.setValue("repeatingType", checked ? "weekly" : null);
+                }}
+              />
+            )}
+          />
+
+          {isRepeating && (
+            <VStack gap={4}>
+              <Controller
+                control={form.control}
+                name="repeatingType"
+                render={({ field }) => (
+                  <Selector
+                    label="Repeat frequency"
+                    options={REPEAT_OPTIONS}
+                    value={field.value ?? "weekly"}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+              <Controller
+                control={form.control}
+                name="repeatingEndDate"
+                render={({ field }) => (
+                  <DateInput
+                    label="Repeat until"
+                    isOptional
+                    description="Leave empty to repeat indefinitely"
+                    hasClear
+                    value={(field.value || undefined) as ISODateString | undefined}
+                    onChange={(v) => field.onChange(v ?? "")}
+                  />
+                )}
+              />
+            </VStack>
+          )}
+
+          {/* RSVP & attendance */}
+          {sectionLabel("RSVP & attendance")}
+
+          <Controller
+            control={form.control}
+            name="rsvpEnabled"
+            render={({ field }) => (
+              <CheckboxInput
+                label="Enable RSVP"
+                labelIcon={CalendarCheck}
+                description="Allow members to accept, decline, or mark as tentative"
+                value={field.value}
+                onChange={(checked) => field.onChange(checked)}
+              />
+            )}
+          />
+
+          {rsvpEnabled && (
+            <Controller
+              control={form.control}
+              name="rsvpDeadline"
+              render={({ field }) => (
+                <DateInput
+                  label="RSVP deadline"
+                  isOptional
+                  description="Leave empty for no deadline"
+                  hasClear
+                  value={(field.value || undefined) as ISODateString | undefined}
+                  onChange={(v) => field.onChange(v ?? "")}
+                />
+              )}
+            />
+          )}
+
+          <Controller
+            control={form.control}
+            name="isOptional"
+            render={({ field }) => (
+              <CheckboxInput
+                label="Optional event"
+                labelIcon={CircleDashed}
+                description="Shows as tentative in external calendars"
+                value={field.value}
+                onChange={(checked) => field.onChange(checked)}
+              />
+            )}
+          />
+
+          {/* Details */}
+          {sectionLabel("Details")}
+
+          <Controller
+            control={form.control}
+            name="location"
+            render={({ field }) => (
+              <TextInput
+                label="Location"
+                isOptional
+                placeholder="Room, address, or meeting link"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+              />
+            )}
+          />
+
+          <HStack gap={3} align="start">
+            <Controller
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <Selector
+                  label="Category"
+                  options={CATEGORY_OPTIONS}
+                  value={field.value}
+                  onChange={(v) => field.onChange(v as EventCategory)}
+                />
+              )}
+            />
+            <Controller
+              control={form.control}
+              name="color"
+              render={({ field }) => (
+                <Selector
+                  label="Color"
+                  options={COLOR_OPTIONS}
+                  value={field.value}
+                  onChange={field.onChange}
+                  renderOption={renderColorOption}
+                />
+              )}
+            />
+          </HStack>
+
+          {/* Visibility & registration */}
+          {sectionLabel("Visibility & registration")}
+
+          <Controller
+            control={form.control}
+            name="isPublic"
+            render={({ field }) => (
+              <CheckboxInput
+                label="Public event"
+                labelIcon={Globe}
+                description="Visible on the public calendar and accessible via link"
+                value={field.value}
+                onChange={(checked) => field.onChange(checked)}
+              />
+            )}
+          />
+
+          {isPublic && (
+            <VStack gap={4}>
+              <Controller
+                control={form.control}
+                name="registrationOpen"
+                render={({ field }) => (
+                  <CheckboxInput
+                    label="Accept registrations"
+                    labelIcon={UserCheck}
+                    description="Allow visitors to register for this event"
+                    value={field.value}
+                    onChange={(checked) => field.onChange(checked)}
+                  />
+                )}
+              />
+              <Controller
+                control={form.control}
+                name="maxRegistrations"
+                render={({ field }) => (
+                  <TextInput
+                    label="Max registrations"
+                    isOptional
+                    placeholder="Leave empty for unlimited"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+              <VStack gap={1}>
+                <Text type="label" weight="medium">
+                  Registration form fields
+                </Text>
+                <Text type="supporting" color="secondary">
+                  Customize the information you collect from registrants
+                </Text>
+              </VStack>
+              <RegistrationFormBuilder
+                fields={registrationFields}
+                onChange={setRegistrationFields}
+              />
+            </VStack>
+          )}
+
+          <Divider />
+          <HStack justify="end" gap={2}>
+            <Button
+              label="Cancel"
+              variant="ghost"
+              type="button"
+              onClick={() => onOpenChange(false)}
+            />
+            <Button
+              label={isEditing ? "Save changes" : "Create event"}
+              variant="primary"
+              type="submit"
+              isLoading={loading}
+            />
+          </HStack>
+        </VStack>
+      </form>
     </Dialog>
   );
 }

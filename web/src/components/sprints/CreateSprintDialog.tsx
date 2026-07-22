@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { TextArea } from "@astryxdesign/core/TextArea";
+import { DateInput } from "@astryxdesign/core/DateInput";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
+import { Button } from "@astryxdesign/core/Button";
+import { toast } from "@/components/system/toast";
 import { createSprint, updateSprint } from "@/lib/firestore";
 import { parseLocalDate } from "@/lib/date-utils";
 import { format } from "date-fns";
@@ -39,8 +42,7 @@ export default function CreateSprintDialog({
   const [endDate, setEndDate] = useState(sprint ? tsToDateStr(sprint.endDate) : "");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!name.trim()) return;
     setLoading(true);
     try {
@@ -87,36 +89,36 @@ export default function CreateSprintDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{isEditing ? "Edit sprint" : "Create sprint"}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Name *</Label>
-            <Input placeholder="Sprint 1" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
-          </div>
-          <div className="space-y-2">
-            <Label>Goal</Label>
-            <Textarea placeholder="What should be accomplished?" value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Start date</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>End date</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <Button type="submit" disabled={loading || !name.trim()} className="flex-1">
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{isEditing ? "Save" : "Create sprint"}
-            </Button>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          </div>
-        </form>
-      </DialogContent>
+    <Dialog isOpen={open} onOpenChange={(v) => !v && onClose()} purpose="form" width={480}>
+      <Layout
+        header={<DialogHeader title={isEditing ? "Edit sprint" : "Create sprint"} onOpenChange={(v) => !v && onClose()} />}
+        content={
+          <LayoutContent padding={4}>
+            <FormLayout>
+              <TextInput label="Name" isRequired value={name} onChange={setName} placeholder="Sprint 1" hasAutoFocus />
+              <TextArea label="Goal" value={goal} onChange={setGoal} placeholder="What should be accomplished?" rows={3} isOptional />
+              <FormLayout direction="horizontal">
+                <DateInput label="Start date" value={(startDate || undefined) as ISODateString | undefined} onChange={(v) => setStartDate(v ?? "")} hasClear isOptional />
+                <DateInput label="End date" value={(endDate || undefined) as ISODateString | undefined} onChange={(v) => setEndDate(v ?? "")} hasClear isOptional />
+              </FormLayout>
+            </FormLayout>
+          </LayoutContent>
+        }
+        footer={
+          <LayoutFooter hasDivider>
+            <HStack gap={2} hAlign="end">
+              <Button label="Cancel" variant="secondary" onClick={onClose} />
+              <Button
+                label={isEditing ? "Save" : "Create sprint"}
+                variant="primary"
+                isLoading={loading}
+                isDisabled={!name.trim()}
+                clickAction={handleSubmit}
+              />
+            </HStack>
+          </LayoutFooter>
+        }
+      />
     </Dialog>
   );
 }

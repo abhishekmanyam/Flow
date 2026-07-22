@@ -13,8 +13,12 @@ import TaskCard from "./TaskCard";
 import { buildTaskIdentifiers } from "@/lib/task-utils";
 import CreateTaskDialog from "@/components/tasks/CreateTaskDialog";
 import TaskDetailSheet from "@/components/tasks/TaskDetailSheet";
-import { DotLottieReact } from "@lottiefiles/dotlottie-react";
-import { Button } from "@/components/ui/button";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { StackItem } from "@astryxdesign/core/Layout";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Button } from "@astryxdesign/core/Button";
+import { Icon } from "@astryxdesign/core/Icon";
 import { Plus } from "lucide-react";
 import { TASK_STATUSES, TASK_STATUS_LABELS } from "@/lib/types";
 import type { Task, Project, WorkspaceMember, Label, Epic, Sprint, TaskStatus } from "@/lib/types";
@@ -125,31 +129,35 @@ export default memo(function KanbanBoard({
   };
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <div className="flex items-center gap-2 px-6 py-3 border-b">
-        {canEdit && (
-          <>
-            <Button size="sm" onClick={() => setCreateStatus("backlog")}>
-              <Plus className="mr-1.5 h-4 w-4" />Add task
-            </Button>
-            <div className="h-10 w-10 shrink-0">
-              <DotLottieReact
-                src="/Moody Wolf.lottie"
-                loop
-                autoplay
-                style={{ width: "100%", height: "100%" }}
+    <VStack height="100%">
+      <VStack>
+        <HStack hAlign="between" vAlign="center" paddingInline={4} paddingBlock={3}>
+          <HStack gap={2} vAlign="center">
+            {canEdit && (
+              <Button
+                label="Add task"
+                variant="primary"
+                size="sm"
+                icon={<Icon icon={Plus} size="sm" />}
+                onClick={() => setCreateStatus("backlog")}
               />
-            </div>
+            )}
+          </HStack>
+          {viewToggle && <HStack gap={2} vAlign="center">{viewToggle}</HStack>}
+        </HStack>
+        {filterBar && (
+          <>
+            <Divider />
+            <VStack paddingInline={4} paddingBlock={2}>{filterBar}</VStack>
           </>
         )}
-        {viewToggle && <div className="ml-auto">{viewToggle}</div>}
-      </div>
-      {filterBar && <div className="px-6 py-2 border-b">{filterBar}</div>}
+        <Divider />
+      </VStack>
 
-      <DndContext sensors={sensors} collisionDetection={closestCorners}
-        onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-        <div className="flex-1 overflow-x-auto">
-          <div className="flex gap-4 p-4 h-full min-w-max">
+      <StackItem size="fill">
+        <DndContext sensors={sensors} collisionDetection={closestCorners}
+          onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
+          <HStack gap={4} padding={4} isScrollable height="100%" vAlign="stretch">
             {TASK_STATUSES.map((status) => (
               <KanbanColumn key={status} status={status} label={TASK_STATUS_LABELS[status]}
                 tasks={getByStatus(status)} canEdit={canEdit}
@@ -158,12 +166,12 @@ export default memo(function KanbanBoard({
                 members={members} labels={labels} epics={epics} sprints={sprints}
                 taskIdentifiers={taskIdentifiers} />
             ))}
-          </div>
-        </div>
-        <DragOverlay>
-          {activeTask && <TaskCard task={activeTask} isDragging onSelect={() => {}} members={members} labels={labels} epics={epics} sprints={sprints} taskIdentifier={taskIdentifiers.get(activeTask.id)} />}
-        </DragOverlay>
-      </DndContext>
+          </HStack>
+          <DragOverlay>
+            {activeTask && <TaskCard task={activeTask} isDragging onSelect={() => {}} members={members} labels={labels} epics={epics} sprints={sprints} taskIdentifier={taskIdentifiers.get(activeTask.id)} />}
+          </DragOverlay>
+        </DndContext>
+      </StackItem>
 
       {createStatus && (
         <CreateTaskDialog open defaultStatus={createStatus} project={project}
@@ -173,6 +181,6 @@ export default memo(function KanbanBoard({
       <TaskDetailSheet taskId={selectedTaskId} project={project} workspaceId={workspaceId}
         members={members} labels={labels} epics={epics} sprints={sprints} currentUserId={currentUserId} canEdit={canEdit}
         isProjectAdmin={isProjectAdmin} onClose={() => setSelectedTaskId(null)} onUpdated={handleTaskUpdated} />
-    </div>
+    </VStack>
   );
 });

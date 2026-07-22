@@ -1,13 +1,46 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Token } from "@astryxdesign/core/Token";
+import { Icon } from "@astryxdesign/core/Icon";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Pencil, Trash2, Plus, Tags } from "lucide-react";
+import { toast } from "@/components/system/toast";
 import { createLabel, updateLabel, deleteLabel } from "@/lib/firestore";
 import { LABEL_COLORS } from "@/lib/types";
 import type { Label } from "@/lib/types";
+
+/** Colored dot carrying a label's own hex color. */
+function colorDot(color: string) {
+  return (
+    <svg viewBox="0 0 8 8" width={8} height={8} aria-hidden="true">
+      <circle cx={4} cy={4} r={4} fill={color} />
+    </svg>
+  );
+}
+
+function ColorSwatches({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <HStack gap={1} wrap="wrap">
+      {LABEL_COLORS.map((c) => (
+        <Token
+          key={c}
+          label={c}
+          isLabelHidden
+          size="sm"
+          icon={colorDot(c)}
+          endContent={value === c ? <Icon icon="check" size="xsm" /> : undefined}
+          onClick={() => onChange(c)}
+        />
+      ))}
+    </HStack>
+  );
+}
 
 interface ManageLabelsDialogProps {
   open: boolean;
@@ -17,14 +50,12 @@ interface ManageLabelsDialogProps {
   projectId: string;
 }
 
-export default function ManageLabelsDialog({
-  open, onClose, labels, workspaceId, projectId,
-}: ManageLabelsDialogProps) {
+export default function ManageLabelsDialog({ open, onClose, labels, workspaceId, projectId }: ManageLabelsDialogProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
-  const [editColor, setEditColor] = useState(LABEL_COLORS[0]);
+  const [editColor, setEditColor] = useState<string>(LABEL_COLORS[0]);
   const [newName, setNewName] = useState("");
-  const [newColor, setNewColor] = useState(LABEL_COLORS[0]);
+  const [newColor, setNewColor] = useState<string>(LABEL_COLORS[0]);
   const [adding, setAdding] = useState(false);
 
   const handleCreate = async () => {
@@ -67,77 +98,63 @@ export default function ManageLabelsDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Manage Labels</DialogTitle></DialogHeader>
-        <div className="space-y-2 max-h-80 overflow-y-auto">
-          {labels.length === 0 && !adding && (
-            <p className="text-sm text-muted-foreground text-center py-4">No labels yet</p>
-          )}
-          {labels.map((label) =>
-            editingId === label.id ? (
-              <div key={label.id} className="space-y-2 rounded-md border p-3">
-                <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Label name"
-                  onKeyDown={(e) => e.key === "Enter" && handleUpdate(label.id)} autoFocus />
-                <div className="flex flex-wrap gap-1.5">
-                  {LABEL_COLORS.map((c) => (
-                    <button key={c} type="button" onClick={() => setEditColor(c)}
-                      className={cn("h-5 w-5 rounded-full border-2 transition-all",
-                        editColor === c ? "border-foreground scale-110" : "border-transparent hover:border-muted-foreground")}
-                      style={{ backgroundColor: c }} />
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => handleUpdate(label.id)} disabled={!editName.trim()}>
-                    <Check className="mr-1 h-3.5 w-3.5" />Save
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
-                    <X className="mr-1 h-3.5 w-3.5" />Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div key={label.id} className="flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-muted/50 group">
-                <div className="h-3.5 w-3.5 rounded-full shrink-0" style={{ backgroundColor: label.color }} />
-                <span className="text-sm flex-1 truncate">{label.name}</span>
-                <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => startEdit(label)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDelete(label.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            )
-          )}
-          {adding && (
-            <div className="space-y-2 rounded-md border p-3">
-              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Label name"
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()} autoFocus />
-              <div className="flex flex-wrap gap-1.5">
-                {LABEL_COLORS.map((c) => (
-                  <button key={c} type="button" onClick={() => setNewColor(c)}
-                    className={cn("h-5 w-5 rounded-full border-2 transition-all",
-                      newColor === c ? "border-foreground scale-110" : "border-transparent hover:border-muted-foreground")}
-                    style={{ backgroundColor: c }} />
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleCreate} disabled={!newName.trim()}>
-                  <Check className="mr-1 h-3.5 w-3.5" />Create
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setNewName(""); }}>
-                  <X className="mr-1 h-3.5 w-3.5" />Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-        {!adding && (
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />Add label
-          </Button>
-        )}
-      </DialogContent>
+    <Dialog isOpen={open} onOpenChange={(v) => !v && onClose()} purpose="form" width={480}>
+      <Layout
+        header={<DialogHeader title="Manage labels" onOpenChange={() => onClose()} />}
+        content={
+          <LayoutContent>
+            <VStack gap={2}>
+              {labels.length === 0 && !adding && (
+                <EmptyState icon={<Tags />} title="No labels yet" description="Create labels to organize your tasks." isCompact />
+              )}
+              {labels.map((label) =>
+                editingId === label.id ? (
+                  <VStack key={label.id} gap={2} padding={3}>
+                    <TextInput
+                      label="Label name"
+                      isLabelHidden
+                      value={editName}
+                      onChange={setEditName}
+                      placeholder="Label name"
+                      hasAutoFocus
+                    />
+                    <ColorSwatches value={editColor} onChange={setEditColor} />
+                    <HStack gap={2}>
+                      <Button label="Save" variant="primary" size="sm" isDisabled={!editName.trim()} onClick={() => handleUpdate(label.id)} />
+                      <Button label="Cancel" variant="ghost" size="sm" onClick={() => setEditingId(null)} />
+                    </HStack>
+                  </VStack>
+                ) : (
+                  <HStack key={label.id} justify="between" align="center" gap={2}>
+                    <Token label={label.name} size="sm" icon={colorDot(label.color)} />
+                    <HStack gap={1}>
+                      <IconButton label="Edit label" tooltip="Edit" variant="ghost" size="sm" icon={<Pencil />} onClick={() => startEdit(label)} />
+                      <IconButton label="Delete label" tooltip="Delete" variant="destructive" size="sm" icon={<Trash2 />} onClick={() => handleDelete(label.id)} />
+                    </HStack>
+                  </HStack>
+                )
+              )}
+              {adding && (
+                <VStack gap={2} padding={3}>
+                  <TextInput label="Label name" isLabelHidden value={newName} onChange={setNewName} placeholder="Label name" hasAutoFocus />
+                  <ColorSwatches value={newColor} onChange={setNewColor} />
+                  <HStack gap={2}>
+                    <Button label="Create" variant="primary" size="sm" isDisabled={!newName.trim()} onClick={handleCreate} />
+                    <Button label="Cancel" variant="ghost" size="sm" onClick={() => { setAdding(false); setNewName(""); }} />
+                  </HStack>
+                </VStack>
+              )}
+            </VStack>
+          </LayoutContent>
+        }
+        footer={
+          !adding ? (
+            <LayoutFooter>
+              <Button label="Add label" variant="secondary" size="sm" icon={<Plus />} onClick={() => setAdding(true)} />
+            </LayoutFooter>
+          ) : undefined
+        }
+      />
     </Dialog>
   );
 }

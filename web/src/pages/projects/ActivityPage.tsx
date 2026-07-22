@@ -4,13 +4,17 @@ import { useAuthStore } from "@/store/auth";
 import { useProjectAccess } from "@/hooks/useProjectAccess";
 import { subscribeToProjectEvents, subscribeToTasks, getWorkspaceMembers } from "@/lib/firestore";
 import ProjectHeader from "@/components/projects/ProjectHeader";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Skeleton } from "@/components/ui/skeleton";
-import { MotionPage } from "@/components/ui/motion-page";
-import { StaggerContainer, StaggerItem } from "@/components/ui/stagger";
-import { EmptyState } from "@/components/ui/empty-state";
+import { Layout, LayoutContent } from "@astryxdesign/core/Layout";
+import { VStack } from "@astryxdesign/core/VStack";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Text } from "@astryxdesign/core/Text";
+import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { Banner } from "@astryxdesign/core/Banner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Activity } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { isToday, isYesterday, format } from "date-fns";
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from "@/lib/types";
 import type { Project, TaskEvent, TaskStatus, TaskPriority } from "@/lib/types";
 import { doc, getDoc } from "firebase/firestore";
@@ -22,9 +26,10 @@ function tsToDate(ts: unknown): Date {
   return new Date(ts as string);
 }
 
-function getInitials(name: string | null | undefined) {
-  if (!name) return "?";
-  return name.split(/\s/).map((s) => s[0]?.toUpperCase()).slice(0, 2).join("");
+function dayLabel(d: Date): string {
+  if (isToday(d)) return "Today";
+  if (isYesterday(d)) return "Yesterday";
+  return format(d, "MMMM d, yyyy");
 }
 
 export default function ActivityPage() {
@@ -33,6 +38,7 @@ export default function ActivityPage() {
   const { loading: accessLoading, hasAccess, canEdit, isProjectAdmin } = useProjectAccess(projectId);
   const [project, setProject] = useState<Project | null>(null);
   const [events, setEvents] = useState<TaskEvent[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [memberNameMap, setMemberNameMap] = useState<Map<string, string>>(new Map());
   const [memberAvatarMap, setMemberAvatarMap] = useState<Map<string, string | null>>(new Map());
   const [taskTitleMap, setTaskTitleMap] = useState<Map<string, string>>(new Map());
@@ -59,24 +65,36 @@ export default function ActivityPage() {
     });
   }, [workspace?.id, projectId]);
 
-  // Subscribe to all project events via collectionGroup query
   useEffect(() => {
     if (!workspace || !projectId) return;
-    return subscribeToProjectEvents(projectId, 50, setEvents);
+    return subscribeToProjectEvents(projectId, 50, (list) => {
+      setEvents(list);
+      setLoaded(true);
+    });
   }, [workspace?.id, projectId]);
 
-  if (accessLoading || !workspace || !project) return (
-    <div className="p-6 space-y-4"><Skeleton className="h-8 w-48" />{[1,2,3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
-  );
+  if (accessLoading || !workspace || !project) {
+    return (
+      <Layout>
+        <LayoutContent padding={4}>
+          <VStack gap={3}>
+            <Skeleton height={28} width={200} />
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} height={48} />)}
+          </VStack>
+        </LayoutContent>
+      </Layout>
+    );
+  }
 
-  if (!hasAccess) return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center space-y-2">
-        <h2 className="text-lg font-semibold">Access Denied</h2>
-        <p className="text-sm text-muted-foreground">You don&apos;t have access to this project.</p>
-      </div>
-    </div>
-  );
+  if (!hasAccess) {
+    return (
+      <Layout>
+        <LayoutContent padding={4}>
+          <Banner status="error" title="Access denied" description="You don't have access to this project." />
+        </LayoutContent>
+      </Layout>
+    );
+  }
 
   function describeEvent(ev: TaskEvent): string {
     const who = memberNameMap.get(ev.userId ?? "") ?? "Someone";
@@ -90,30 +108,54 @@ export default function ActivityPage() {
     }
   }
 
+  // Group events into consecutive day buckets (events arrive sorted newest-first).
+  const groups: { label: string; items: TaskEvent[] }[] = [];
+  for (const ev of events) {
+    const label = dayLabel(tsToDate(ev.createdAt));
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(ev);
+    else groups.push({ label, items: [ev] });
+  }
+
   return (
-    <MotionPage className="flex flex-col h-full">
-      <ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} />
-      <div className="flex-1 overflow-auto p-6 max-w-2xl">
-        <h2 className="text-lg font-semibold mb-4">Project Activity</h2>
-        {events.length === 0 ? (
-          <EmptyState icon={Activity} title="No activity yet" description="Activity will appear here as your team works on tasks" />
-        ) : (
-          <StaggerContainer className="space-y-3">
-            {events.map((ev) => (
-              <StaggerItem key={ev.id} className="flex gap-3 items-start">
-                <Avatar className="h-7 w-7 shrink-0 mt-0.5">
-                  <AvatarImage src={memberAvatarMap.get(ev.userId ?? "") ?? undefined} />
-                  <AvatarFallback className="text-xs">{getInitials(memberNameMap.get(ev.userId ?? ""))}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm">{describeEvent(ev)}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{formatDistanceToNow(tsToDate(ev.createdAt), { addSuffix: true })}</p>
-                </div>
-              </StaggerItem>
-            ))}
-          </StaggerContainer>
-        )}
-      </div>
-    </MotionPage>
+    <Layout
+      header={<ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} />}
+      content={
+        <LayoutContent padding={0}>
+          {events.length === 0 && loaded ? (
+            <EmptyState
+              icon={<Activity size={28} />}
+              title="No activity yet"
+              description="Activity will appear here as your team works on tasks"
+            />
+          ) : (
+            <VStack gap={0} maxWidth={720}>
+              {groups.map((group) => (
+                <List
+                  key={group.label}
+                  hasDividers
+                  header={<Text type="label" color="secondary">{group.label}</Text>}
+                >
+                  {group.items.map((ev) => (
+                    <ListItem
+                      key={ev.id}
+                      label={describeEvent(ev)}
+                      startContent={
+                        <Avatar
+                          size="small"
+                          src={memberAvatarMap.get(ev.userId ?? "") ?? undefined}
+                          name={memberNameMap.get(ev.userId ?? "") ?? "Unknown"}
+                        />
+                      }
+                      endContent={<Timestamp value={tsToDate(ev.createdAt).toISOString()} format="relative" type="supporting" />}
+                    />
+                  ))}
+                </List>
+              ))}
+            </VStack>
+          )}
+        </LayoutContent>
+      }
+    />
   );
 }

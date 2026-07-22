@@ -1,4 +1,13 @@
-import { Badge } from "@/components/ui/badge";
+import { Token } from "@astryxdesign/core/Token";
+
+/** Colored dot rendered as the token's leading icon, carrying the epic's own hex color. */
+function colorDot(color: string) {
+  return (
+    <svg viewBox="0 0 8 8" width={8} height={8} aria-hidden="true">
+      <circle cx={4} cy={4} r={4} fill={color} />
+    </svg>
+  );
+}
 
 interface EpicBadgeProps {
   title: string;
@@ -6,14 +15,6 @@ interface EpicBadgeProps {
   className?: string;
 }
 
-export default function EpicBadge({ title, color, className }: EpicBadgeProps) {
-  return (
-    <Badge
-      variant="outline"
-      className={className}
-      style={{ borderColor: color, color, backgroundColor: `${color}15` }}
-    >
-      {title}
-    </Badge>
-  );
+export default function EpicBadge({ title, color }: EpicBadgeProps) {
+  return <Token label={title} size="sm" icon={colorDot(color)} />;
 }

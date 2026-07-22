@@ -1,42 +1,69 @@
-import { Separator } from "@/components/ui/separator";
+import type { ReactNode } from "react";
+import { AppShell } from "@astryxdesign/core/AppShell";
+import { TopNav, TopNavHeading } from "@astryxdesign/core/TopNav";
+import { Center } from "@astryxdesign/core/Center";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Text } from "@astryxdesign/core/Text";
 
 interface PublicLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
   workspaceName?: string;
 }
+
+const CONTENT_WIDTH = 896;
 
 export default function PublicLayout({
   children,
   workspaceName,
 }: PublicLayoutProps) {
   return (
-    <div className="min-h-screen bg-background">
-      {/* Top bar */}
-      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
-          <img
-            src="/logo.png"
-            alt={workspaceName ?? ""}
-            className="h-8 sm:h-9 w-auto object-contain"
-          />
-        </div>
-      </header>
+    <AppShell
+      height="auto"
+      variant="section"
+      contentPadding={0}
+      topNav={
+        <TopNav
+          label="Public events navigation"
+          heading={
+            <TopNavHeading
+              headingHref="/"
+              heading={workspaceName ?? "Events"}
+            />
+          }
+        />
+      }
+    >
+      <VStack gap={0}>
+        <Center axis="horizontal">
+          <VStack
+            width="100%"
+            maxWidth={CONTENT_WIDTH}
+            padding={6}
+            paddingBlock={8}
+            gap={6}
+          >
+            {children}
+          </VStack>
+        </Center>
 
-      {/* Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-        {children}
-      </main>
+        <Divider />
 
-      {/* Footer */}
-      <footer className="border-t mt-12">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-          <Separator className="mb-6" />
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Powered by FlowTask</span>
-            {workspaceName && <span>{workspaceName}</span>}
-          </div>
-        </div>
-      </footer>
-    </div>
+        <Center axis="horizontal">
+          <HStack
+            width="100%"
+            maxWidth={CONTENT_WIDTH}
+            paddingInline={6}
+            paddingBlock={5}
+            justify="between"
+            align="center"
+          >
+            <Text type="supporting">Powered by FlowTask</Text>
+            {workspaceName && <Text type="supporting">{workspaceName}</Text>}
+          </HStack>
+        </Center>
+      </VStack>
+    </AppShell>
   );
 }

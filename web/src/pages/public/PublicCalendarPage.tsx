@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, Fragment } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useParams } from "react-router-dom";
 import {
   format,
   addMonths,
@@ -11,36 +12,47 @@ import {
   startOfDay,
   differenceInCalendarDays,
 } from "date-fns";
-import {
-  CalendarDays,
-  List,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Clock,
-  ArrowRight,
-  Layers,
-} from "lucide-react";
+import { CalendarDays, List as ListIcon } from "lucide-react";
 import type { CalendarEvent, EventCategory } from "@/lib/types";
-import { EVENT_CATEGORY_LABELS, EVENT_CATEGORY_COLORS } from "@/lib/types";
+import { EVENT_CATEGORY_LABELS } from "@/lib/types";
 import { getPublicCalendarEvents } from "@/lib/firestore";
 import PublicLayout from "@/components/calendar/PublicLayout";
 import FullCalendarView from "@/components/calendar/FullCalendarView";
-import EventCategoryBadge from "@/components/calendar/EventCategoryBadge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Separator } from "@/components/ui/separator";
+import { Center } from "@astryxdesign/core/Center";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Token } from "@astryxdesign/core/Token";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Card } from "@astryxdesign/core/Card";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Divider } from "@astryxdesign/core/Divider";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { TabList, Tab } from "@astryxdesign/core/TabList";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+} from "@astryxdesign/core/SegmentedControl";
+
+type TokenColor = "blue" | "purple" | "orange" | "green" | "gray";
+
+const CATEGORY_TOKEN_COLOR: Record<EventCategory, TokenColor> = {
+  meeting: "blue",
+  workshop: "purple",
+  webinar: "orange",
+  social: "green",
+  other: "gray",
+};
 
 function toDate(val: unknown): Date {
   if (!val) return new Date();
   if (val instanceof Date) return val;
-  if (
-    typeof val === "object" &&
-    "toDate" in (val as Record<string, unknown>)
-  ) {
+  if (typeof val === "object" && "toDate" in (val as Record<string, unknown>)) {
     return (val as { toDate: () => Date }).toDate();
   }
   return new Date(val as string);
@@ -53,16 +65,13 @@ function formatEventTime(event: CalendarEvent): string {
   const multiDay = !isSameDay(start, end);
   if (event.allDay) return "All day";
   const t = (d: Date) => format(d, "h:mm a").replace(":00", "");
-  return multiDay
-    ? `${t(start)} – ${t(end)} daily`
-    : `${t(start)} – ${t(end)}`;
+  return multiDay ? `${t(start)} – ${t(end)} daily` : `${t(start)} – ${t(end)}`;
 }
 
 /** Best-effort venue name from a freeform location string. */
 function shortVenue(location: string | null | undefined): string | null {
   if (!location) return null;
   let s = location.split(",")[0]?.trim() ?? location;
-  // If the first chunk still includes a street number, cut at the first digit run.
   const digitMatch = s.match(/\s\d/);
   if (digitMatch && digitMatch.index !== undefined && digitMatch.index > 3) {
     s = s.slice(0, digitMatch.index).trim();
@@ -120,8 +129,7 @@ function buildEntries(events: CalendarEvent[]): Entry[] {
   for (const [key, evs] of buckets) {
     if (evs.length >= 2) {
       const sorted = [...evs].sort(
-        (a, b) =>
-          toDate(a.startDate).getTime() - toDate(b.startDate).getTime()
+        (a, b) => toDate(a.startDate).getTime() - toDate(b.startDate).getTime()
       );
       const rep = sorted[0];
       entries.push({
@@ -162,7 +170,6 @@ function buildDateGroups(entries: Entry[]): DateGroup[] {
     const s = entry.anchorStart;
     const e = entry.anchorEnd;
     const multi = !isSameDay(s, e);
-    // Series and multi-day events always stand alone; single-day singletons can merge by date.
     const key =
       entry.kind === "series"
         ? `s-${entry.key}`
@@ -179,201 +186,25 @@ function buildDateGroups(entries: Entry[]): DateGroup[] {
   return groups;
 }
 
-function EventRow({
-  event,
-  workspaceId,
-}: {
-  event: CalendarEvent;
-  workspaceId: string | undefined;
-}) {
-  const venue = shortVenue(event.location);
-  return (
-    <Link
-      to={`/events/${workspaceId}/${event.id}`}
-      className="group flex items-center gap-3 px-3 sm:px-4 py-3 hover:bg-accent/40 transition-colors min-w-0"
-    >
-      <span
-        className="size-2.5 rounded-full shrink-0"
-        style={{ backgroundColor: event.color }}
-        aria-hidden
-      />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
-          {event.title}
-        </p>
-        <p className="text-xs text-muted-foreground mt-0.5 truncate">
-          <span className="tabular-nums">{formatEventTime(event)}</span>
-          {venue && (
-            <>
-              <span className="mx-1.5 opacity-50">·</span>
-              {venue}
-            </>
-          )}
-        </p>
-      </div>
-      {event.registrationOpen ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="shrink-0 h-8 px-3 text-xs group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-colors"
-          tabIndex={-1}
-        >
-          Register
-        </Button>
-      ) : (
-        <ArrowRight className="h-4 w-4 text-muted-foreground/40 shrink-0 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-      )}
-    </Link>
-  );
-}
-
-function SeriesRow({
-  entry,
-  workspaceId,
-}: {
-  entry: Extract<Entry, { kind: "series" }>;
-  workspaceId: string | undefined;
-}) {
-  const [open, setOpen] = useState(false);
-  const rep = entry.representative;
-  const venue = shortVenue(rep.location);
-  const count = entry.events.length;
-
-  const start = entry.anchorStart;
-  const end = entry.events[entry.events.length - 1].endDate;
-  const lastDate = toDate(end);
-  const sameYear = isSameYear(start, lastDate);
-  const rangeLabel = isSameMonth(start, lastDate)
-    ? `${format(start, "MMM d")} – ${format(lastDate, "d")}`
-    : sameYear
-      ? `${format(start, "MMM")} – ${format(lastDate, "MMM")}`
-      : `${format(start, "MMM yyyy")} – ${format(lastDate, "MMM yyyy")}`;
-
-  return (
-    <div className="min-w-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="group w-full flex items-center gap-3 px-3 sm:px-4 py-3 hover:bg-accent/40 transition-colors min-w-0 text-left"
-        aria-expanded={open}
-      >
-        <span
-          className="size-2.5 rounded-full shrink-0"
-          style={{ backgroundColor: rep.color }}
-          aria-hidden
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
-              {rep.title}
-            </p>
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 rounded-full px-1.5 py-0.5 shrink-0">
-              <Layers className="h-2.5 w-2.5" />
-              {count} sessions
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            <span className="tabular-nums">{formatEventTime(rep)}</span>
-            {venue && (
-              <>
-                <span className="mx-1.5 opacity-50">·</span>
-                {venue}
-              </>
-            )}
-            <span className="mx-1.5 opacity-50">·</span>
-            <span className="tabular-nums">{rangeLabel}</span>
-          </p>
-        </div>
-        <ChevronDown
-          className={`h-4 w-4 text-muted-foreground/60 shrink-0 transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        />
-      </button>
-
-      {open && (
-        <ul className="border-t bg-muted/20 divide-y">
-          {entry.events.map((ev) => {
-            const s = toDate(ev.startDate);
-            const e = toDate(ev.endDate);
-            const rel = relativeDayLabel(s);
-            const dateLabel = isSameDay(s, e)
-              ? format(s, "EEE, MMM d")
-              : isSameMonth(s, e)
-                ? `${format(s, "MMM d")} – ${format(e, "d")}`
-                : `${format(s, "MMM d")} – ${format(e, "MMM d")}`;
-            return (
-              <li key={ev.id} className="min-w-0">
-                <Link
-                  to={`/events/${workspaceId}/${ev.id}`}
-                  className="group/session flex items-center gap-3 pl-8 sm:pl-10 pr-3 sm:pr-4 py-2.5 hover:bg-accent/40 transition-colors min-w-0"
-                >
-                  <div className="flex-1 min-w-0 flex items-baseline gap-2 flex-wrap">
-                    {rel && (
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                        {rel}
-                      </span>
-                    )}
-                    <span className="text-xs font-medium tabular-nums">
-                      {dateLabel}
-                    </span>
-                  </div>
-                  {ev.registrationOpen ? (
-                    <span className="text-xs font-medium text-primary group-hover/session:underline shrink-0">
-                      Register
-                    </span>
-                  ) : (
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0 group-hover/session:text-primary group-hover/session:translate-x-0.5 transition-all" />
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function DateHeader({ group }: { group: DateGroup }) {
+function groupHeading(group: DateGroup): { primary: string; rel: string; secondary: string | null } {
   const { start, end, multi, entries } = group;
-  const isSeries =
-    entries.length === 1 && entries[0].kind === "series";
+  const isSeries = entries.length === 1 && entries[0].kind === "series";
   const rel = relativeDayLabel(start);
-
   let primary: string;
   let secondary: string | null = null;
 
   if (isSeries) {
-    // Series cards carry their own range — header just anchors to first session.
     primary = `Starts ${format(start, "MMM d")}`;
   } else if (!multi) {
     primary = format(start, "EEE, MMM d");
   } else {
     const days = differenceInCalendarDays(end, start) + 1;
-    if (isSameMonth(start, end)) {
-      primary = `${format(start, "MMM d")} – ${format(end, "d")}`;
-    } else {
-      primary = `${format(start, "MMM d")} – ${format(end, "MMM d")}`;
-    }
+    primary = isSameMonth(start, end)
+      ? `${format(start, "MMM d")} – ${format(end, "d")}`
+      : `${format(start, "MMM d")} – ${format(end, "MMM d")}`;
     secondary = `${days} days`;
   }
-
-  return (
-    <div className="flex items-baseline gap-2 mb-2 mt-1">
-      {rel && (
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">
-          {rel}
-        </span>
-      )}
-      <h3 className="text-sm font-semibold tracking-tight text-foreground">
-        {primary}
-      </h3>
-      {secondary && (
-        <span className="text-xs text-muted-foreground">· {secondary}</span>
-      )}
-    </div>
-  );
+  return { primary, rel, secondary };
 }
 
 export default function PublicCalendarPage() {
@@ -385,9 +216,18 @@ export default function PublicCalendarPage() {
   const [view, setView] = useState<string>("list");
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<
-    EventCategory | "all"
-  >("all");
+  const [categoryFilter, setCategoryFilter] = useState<EventCategory | "all">(
+    "all"
+  );
+  const [openSeries, setOpenSeries] = useState<Set<string>>(new Set());
+
+  const toggleSeries = (key: string) =>
+    setOpenSeries((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -418,8 +258,7 @@ export default function PublicCalendarPage() {
           isSameDay(toDate(e.startDate), today)
       )
       .sort(
-        (a, b) =>
-          toDate(a.startDate).getTime() - toDate(b.startDate).getTime()
+        (a, b) => toDate(a.startDate).getTime() - toDate(b.startDate).getTime()
       );
   }, [events]);
 
@@ -447,10 +286,9 @@ export default function PublicCalendarPage() {
   if (loading) {
     return (
       <PublicLayout>
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Loading events...</p>
-        </div>
+        <Center axis="horizontal" height={240}>
+          <Spinner size="lg" label="Loading events…" />
+        </Center>
       </PublicLayout>
     );
   }
@@ -458,190 +296,230 @@ export default function PublicCalendarPage() {
   if (notFound) {
     return (
       <PublicLayout>
-        <div className="text-center py-20 space-y-4">
-          <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mx-auto">
-            <CalendarDays className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h2 className="text-xl font-semibold">Calendar not found</h2>
-          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-            This calendar does not exist or is no longer available. Please
-            check the link and try again.
-          </p>
-        </div>
+        <EmptyState
+          icon={<Icon icon={CalendarDays} size="lg" />}
+          title="Calendar not found"
+          description="This calendar does not exist or is no longer available. Please check the link and try again."
+        />
       </PublicLayout>
     );
+  }
+
+  function renderEventItem(event: CalendarEvent): ReactNode {
+    const venue = shortVenue(event.location);
+    const time = formatEventTime(event);
+    return (
+      <ListItem
+        key={`e-${event.id}`}
+        label={event.title}
+        description={venue ? `${time} · ${venue}` : time}
+        href={`/events/${workspaceId}/${event.id}`}
+        startContent={<Icon icon="calendar" size="sm" color="secondary" />}
+        endContent={
+          <HStack gap={2} align="center">
+            <Token
+              label={EVENT_CATEGORY_LABELS[event.category]}
+              color={CATEGORY_TOKEN_COLOR[event.category]}
+              size="sm"
+            />
+            {event.registrationOpen ? (
+              <Badge variant="info" label="Register" />
+            ) : (
+              <Icon icon="chevronRight" size="sm" color="secondary" />
+            )}
+          </HStack>
+        }
+      />
+    );
+  }
+
+  function renderGroupItems(group: DateGroup): ReactNode[] {
+    const items: ReactNode[] = [];
+    for (const entry of group.entries) {
+      if (entry.kind === "single") {
+        items.push(renderEventItem(entry.event));
+        continue;
+      }
+      const rep = entry.representative;
+      const venue = shortVenue(rep.location);
+      const count = entry.events.length;
+      const lastDate = toDate(entry.events[entry.events.length - 1].endDate);
+      const start = entry.anchorStart;
+      const rangeLabel = isSameMonth(start, lastDate)
+        ? `${format(start, "MMM d")} – ${format(lastDate, "d")}`
+        : isSameYear(start, lastDate)
+          ? `${format(start, "MMM")} – ${format(lastDate, "MMM")}`
+          : `${format(start, "MMM yyyy")} – ${format(lastDate, "MMM yyyy")}`;
+      const open = openSeries.has(entry.key);
+      const time = formatEventTime(rep);
+
+      items.push(
+        <ListItem
+          key={`s-${entry.key}`}
+          label={rep.title}
+          description={`${venue ? `${time} · ${venue}` : time} · ${rangeLabel}`}
+          onClick={() => toggleSeries(entry.key)}
+          isSelected={open}
+          startContent={
+            <Icon icon="calendar" size="sm" color="secondary" />
+          }
+          endContent={
+            <HStack gap={2} align="center">
+              <Badge variant="neutral" label={`${count} sessions`} />
+              <Icon
+                icon={open ? "chevronDown" : "chevronRight"}
+                size="sm"
+                color="secondary"
+              />
+            </HStack>
+          }
+        />
+      );
+
+      if (open) {
+        for (const ev of entry.events) {
+          const s = toDate(ev.startDate);
+          const e = toDate(ev.endDate);
+          const rel = relativeDayLabel(s);
+          const dateLabel = isSameDay(s, e)
+            ? format(s, "EEE, MMM d")
+            : isSameMonth(s, e)
+              ? `${format(s, "MMM d")} – ${format(e, "d")}`
+              : `${format(s, "MMM d")} – ${format(e, "MMM d")}`;
+          items.push(
+            <ListItem
+              key={`ss-${ev.id}`}
+              label={dateLabel}
+              description={rel || undefined}
+              href={`/events/${workspaceId}/${ev.id}`}
+              endContent={
+                ev.registrationOpen ? (
+                  <Badge variant="info" label="Register" />
+                ) : (
+                  <Icon icon="chevronRight" size="sm" color="secondary" />
+                )
+              }
+            />
+          );
+        }
+      }
+    }
+    return items;
   }
 
   return (
     <PublicLayout workspaceName={workspaceName ?? undefined}>
       {/* Hero */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Upcoming Events</h1>
-        <p className="text-muted-foreground mt-1">
+      <VStack gap={1}>
+        <Heading level={1} type="display-2">
+          Upcoming Events
+        </Heading>
+        <Text type="large" color="secondary">
           Browse and register for our upcoming events
-        </p>
-      </div>
+        </Text>
+      </VStack>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
-        {/* Category pills */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setCategoryFilter("all")}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              categoryFilter === "all"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-accent"
-            }`}
-          >
-            All
-            <Badge
-              variant="secondary"
-              className="ml-0.5 h-5 px-1.5 text-[10px]"
-            >
-              {upcomingEvents.length}
-            </Badge>
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() =>
-                setCategoryFilter(cat === categoryFilter ? "all" : cat)
-              }
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                categoryFilter === cat
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              <span
-                className="size-2 rounded-full"
-                style={{ backgroundColor: EVENT_CATEGORY_COLORS[cat] }}
-              />
-              {EVENT_CATEGORY_LABELS[cat]}
-            </button>
-          ))}
-        </div>
-
-        {/* View toggle */}
-        <ToggleGroup
-          type="single"
-          value={view}
-          onValueChange={(val) => {
-            if (val) setView(val);
-          }}
-          variant="outline"
-          className="shrink-0"
+      <HStack justify="between" align="center" wrap="wrap" gap={3}>
+        <TabList
+          value={categoryFilter}
+          onChange={(v) => setCategoryFilter(v as EventCategory | "all")}
         >
-          <ToggleGroupItem
+          <Tab
+            value="all"
+            label="All"
+            endContent={<Badge variant="neutral" label={upcomingEvents.length} />}
+          />
+          {categories.map((cat) => (
+            <Tab key={cat} value={cat} label={EVENT_CATEGORY_LABELS[cat]} />
+          ))}
+        </TabList>
+
+        <SegmentedControl
+          label="View mode"
+          value={view}
+          onChange={setView}
+        >
+          <SegmentedControlItem
             value="list"
-            aria-label="List view"
-            className="gap-1.5"
-          >
-            <List className="h-4 w-4" />
-            <span className="text-xs hidden sm:inline">List</span>
-          </ToggleGroupItem>
-          <ToggleGroupItem
+            label="List"
+            icon={<Icon icon={ListIcon} size="sm" />}
+          />
+          <SegmentedControlItem
             value="calendar"
-            aria-label="Calendar view"
-            className="gap-1.5"
-          >
-            <CalendarDays className="h-4 w-4" />
-            <span className="text-xs hidden sm:inline">Calendar</span>
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </div>
+            label="Calendar"
+            icon={<Icon icon="calendar" size="sm" />}
+          />
+        </SegmentedControl>
+      </HStack>
 
-      {/* ── List View ── */}
-      {view === "list" && (
-        <div className="space-y-5">
-          {filteredEvents.length === 0 ? (
-            <div className="text-center py-16 space-y-4">
-              <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mx-auto">
-                <CalendarDays className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <div>
-                <h3 className="text-lg font-medium">No upcoming events</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {categoryFilter !== "all"
-                    ? "No events in this category. Try a different filter."
-                    : "Check back later for new events."}
-                </p>
-              </div>
-            </div>
-          ) : (
-            dateGroups.map((group) => (
-              <section key={group.key} className="min-w-0">
-                <DateHeader group={group} />
-                <div className="rounded-xl border bg-card divide-y overflow-hidden">
-                  {group.entries.map((entry) => (
-                    <Fragment
-                      key={
-                        entry.kind === "series"
-                          ? `s-${entry.key}`
-                          : `e-${entry.event.id}`
-                      }
-                    >
-                      {entry.kind === "single" ? (
-                        <EventRow
-                          event={entry.event}
-                          workspaceId={workspaceId}
-                        />
-                      ) : (
-                        <SeriesRow entry={entry} workspaceId={workspaceId} />
-                      )}
-                    </Fragment>
-                  ))}
-                </div>
-              </section>
-            ))
-          )}
-        </div>
-      )}
+      {/* List view */}
+      {view === "list" &&
+        (filteredEvents.length === 0 ? (
+          <EmptyState
+            icon={<Icon icon={CalendarDays} size="lg" />}
+            title="No upcoming events"
+            description={
+              categoryFilter !== "all"
+                ? "No events in this category. Try a different filter."
+                : "Check back later for new events."
+            }
+          />
+        ) : (
+          <VStack gap={6}>
+            {dateGroups.map((group) => {
+              const { primary, rel, secondary } = groupHeading(group);
+              return (
+                <VStack key={group.key} gap={2}>
+                  <HStack gap={2} align="center">
+                    {rel && (
+                      <Text type="label" color="accent">
+                        {rel}
+                      </Text>
+                    )}
+                    <Heading level={3}>{primary}</Heading>
+                    {secondary && (
+                      <Text type="supporting">· {secondary}</Text>
+                    )}
+                  </HStack>
+                  <Card padding={0}>
+                    <List hasDividers>{renderGroupItems(group)}</List>
+                  </Card>
+                </VStack>
+              );
+            })}
+          </VStack>
+        ))}
 
-      {/* ── Calendar View ── */}
+      {/* Calendar view */}
       {view === "calendar" && (
-        <div className="space-y-4">
+        <VStack gap={4}>
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">
-                  {format(currentMonth, "MMMM yyyy")}
-                </h2>
-                <div className="flex items-center gap-1">
+            <VStack gap={4}>
+              <HStack justify="between" align="center">
+                <Heading level={2}>{format(currentMonth, "MMMM yyyy")}</Heading>
+                <HStack gap={1} align="center">
+                  <IconButton
+                    label="Previous month"
+                    variant="ghost"
+                    icon={<Icon icon="chevronLeft" size="sm" />}
+                    onClick={() => setCurrentMonth((p) => subMonths(p, 1))}
+                  />
                   <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() =>
-                      setCurrentMonth((prev) => subMonths(prev, 1))
-                    }
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
+                    label="Today"
+                    variant="secondary"
                     size="sm"
-                    className="h-8"
+                    isDisabled={isSameMonth(currentMonth, new Date())}
                     onClick={() => setCurrentMonth(new Date())}
-                    disabled={isSameMonth(currentMonth, new Date())}
-                  >
-                    Today
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() =>
-                      setCurrentMonth((prev) => addMonths(prev, 1))
-                    }
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
+                  />
+                  <IconButton
+                    label="Next month"
+                    variant="ghost"
+                    icon={<Icon icon="chevronRight" size="sm" />}
+                    onClick={() => setCurrentMonth((p) => addMonths(p, 1))}
+                  />
+                </HStack>
+              </HStack>
 
               <FullCalendarView
                 events={events}
@@ -656,65 +534,29 @@ export default function PublicCalendarPage() {
                 }}
                 readOnly
               />
-            </CardContent>
+            </VStack>
           </Card>
 
-          {/* Selected day */}
           {selectedDate && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <h3 className="text-sm font-semibold text-muted-foreground whitespace-nowrap">
+            <VStack gap={2}>
+              <HStack gap={3} align="center">
+                <Heading level={3}>
                   {format(selectedDate, "EEEE, MMMM d")}
-                </h3>
-                <Separator className="flex-1" />
-              </div>
+                </Heading>
+                <Divider />
+              </HStack>
               {selectedDayEvents.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  No events on this day
-                </p>
+                <Text type="supporting">No events on this day</Text>
               ) : (
-                selectedDayEvents.map((event) => (
-                  <Link
-                    key={event.id}
-                    to={`/events/${workspaceId}/${event.id}`}
-                    className="block group"
-                  >
-                    <Card className="overflow-hidden transition-all hover:shadow-md hover:border-primary/20">
-                      <CardContent className="p-0">
-                        <div className="flex min-w-0">
-                          <div
-                            className="w-1 shrink-0"
-                            style={{ backgroundColor: event.color }}
-                          />
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 flex-1 min-w-0 gap-2 sm:gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold group-hover:text-primary transition-colors truncate">
-                                {event.title}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 min-w-0">
-                                <Clock className="h-3 w-3 shrink-0" />
-                                <span className="truncate">{formatEventTime(event)}</span>
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap shrink-0">
-                              <EventCategoryBadge category={event.category} />
-                              {event.registrationOpen && (
-                                <Badge className="gap-1">
-                                  Register
-                                  <ArrowRight className="h-3 w-3" />
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))
+                <Card padding={0}>
+                  <List hasDividers>
+                    {selectedDayEvents.map((event) => renderEventItem(event))}
+                  </List>
+                </Card>
               )}
-            </div>
+            </VStack>
           )}
-        </div>
+        </VStack>
       )}
     </PublicLayout>
   );

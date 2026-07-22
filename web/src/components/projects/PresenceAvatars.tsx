@@ -1,16 +1,6 @@
-import {
-  Avatar,
-  AvatarImage,
-  AvatarFallback,
-  AvatarGroup,
-  AvatarGroupCount,
-} from "@/components/ui/avatar";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from "@/components/ui/tooltip";
+import { AvatarGroup, AvatarGroupOverflow } from "@astryxdesign/core/AvatarGroup";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { AvatarStatusDot } from "@astryxdesign/core/Avatar";
 import type { BoardPresence } from "@/lib/types";
 
 interface PresenceAvatarsProps {
@@ -19,16 +9,6 @@ interface PresenceAvatarsProps {
 }
 
 const MAX_VISIBLE = 5;
-
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
 
 export default function PresenceAvatars({ users, currentUserId }: PresenceAvatarsProps) {
   if (users.length === 0) return null;
@@ -44,39 +24,20 @@ export default function PresenceAvatars({ users, currentUserId }: PresenceAvatar
   const overflow = sorted.length - MAX_VISIBLE;
 
   return (
-    <TooltipProvider>
-      <AvatarGroup>
-        {visible.map((u) => (
-          <Tooltip key={u.userId}>
-            <TooltipTrigger asChild>
-              <Avatar size="sm">
-                {u.avatarUrl ? (
-                  <AvatarImage src={u.avatarUrl} alt={u.displayName} />
-                ) : null}
-                <AvatarFallback>{getInitials(u.displayName)}</AvatarFallback>
-              </Avatar>
-            </TooltipTrigger>
-            <TooltipContent>
-              {u.userId === currentUserId ? "You" : u.displayName}
-            </TooltipContent>
-          </Tooltip>
-        ))}
-        {overflow > 0 && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <AvatarGroupCount className="text-xs">
-                +{overflow}
-              </AvatarGroupCount>
-            </TooltipTrigger>
-            <TooltipContent>
-              {sorted
-                .slice(MAX_VISIBLE)
-                .map((u) => (u.userId === currentUserId ? "You" : u.displayName))
-                .join(", ")}
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </AvatarGroup>
-    </TooltipProvider>
+    <AvatarGroup size="small">
+      {visible.map((u) => {
+        const isYou = u.userId === currentUserId;
+        return (
+          <Avatar
+            key={u.userId}
+            name={u.displayName}
+            src={u.avatarUrl ?? undefined}
+            alt={isYou ? "You" : u.displayName}
+            status={<AvatarStatusDot variant={isYou ? "neutral" : "success"} label={isYou ? "You" : `${u.displayName} online`} />}
+          />
+        );
+      })}
+      {overflow > 0 && <AvatarGroupOverflow count={overflow} />}
+    </AvatarGroup>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   format,
   isSameDay,
@@ -8,35 +8,44 @@ import {
   differenceInCalendarDays,
   startOfDay,
 } from "date-fns";
-import {
-  CalendarDays,
-  MapPin,
-  ArrowLeft,
-  Loader2,
-  Users,
-  Clock,
-  Globe,
-} from "lucide-react";
-import type { CalendarEvent } from "@/lib/types";
-import {
-  getCalendarEvent,
-  getRegistrationCount,
-} from "@/lib/firestore";
+import { CalendarDays, MapPin, ArrowLeft } from "lucide-react";
+import type { CalendarEvent, EventCategory } from "@/lib/types";
+import { EVENT_CATEGORY_LABELS } from "@/lib/types";
+import { getCalendarEvent, getRegistrationCount } from "@/lib/firestore";
 import PublicLayout from "@/components/calendar/PublicLayout";
 import PublicRegistrationForm from "@/components/calendar/PublicRegistrationForm";
-import EventCategoryBadge from "@/components/calendar/EventCategoryBadge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
+import { Center } from "@astryxdesign/core/Center";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Link } from "@astryxdesign/core/Link";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Token } from "@astryxdesign/core/Token";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { Markdown } from "@astryxdesign/core/Markdown";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { Banner } from "@astryxdesign/core/Banner";
+import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+
+type TokenColor = "blue" | "purple" | "orange" | "green" | "gray";
+
+const CATEGORY_TOKEN_COLOR: Record<EventCategory, TokenColor> = {
+  meeting: "blue",
+  workshop: "purple",
+  webinar: "orange",
+  social: "green",
+  other: "gray",
+};
 
 function toDate(val: unknown): Date {
   if (!val) return new Date();
   if (val instanceof Date) return val;
-  if (
-    typeof val === "object" &&
-    "toDate" in (val as Record<string, unknown>)
-  ) {
+  if (typeof val === "object" && "toDate" in (val as Record<string, unknown>)) {
     return (val as { toDate: () => Date }).toDate();
   }
   return new Date(val as string);
@@ -87,10 +96,9 @@ export default function PublicEventPage() {
   if (loading) {
     return (
       <PublicLayout>
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Loading event...</p>
-        </div>
+        <Center axis="horizontal" height={240}>
+          <Spinner size="lg" label="Loading event…" />
+        </Center>
       </PublicLayout>
     );
   }
@@ -98,22 +106,14 @@ export default function PublicEventPage() {
   if (notFound || !event) {
     return (
       <PublicLayout>
-        <div className="text-center py-20 space-y-4">
-          <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mx-auto">
-            <CalendarDays className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h2 className="text-xl font-semibold">Event not found</h2>
-          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-            This event does not exist or is no longer available.
-          </p>
-          <Link
-            to={`/events/${workspaceId}`}
-            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to all events
-          </Link>
-        </div>
+        <EmptyState
+          icon={<Icon icon={CalendarDays} size="lg" />}
+          title="Event not found"
+          description="This event does not exist or is no longer available."
+          actions={
+            <Link href={`/events/${workspaceId}`}>Back to all events</Link>
+          }
+        />
       </PublicLayout>
     );
   }
@@ -121,169 +121,137 @@ export default function PublicEventPage() {
   const spotsLeft = event.maxRegistrations
     ? event.maxRegistrations - registrationCount
     : null;
-  const spotsPercent = event.maxRegistrations
-    ? Math.min((registrationCount / event.maxRegistrations) * 100, 100)
-    : 0;
 
   const start = toDate(event.startDate);
   const end = toDate(event.endDate);
+  const multi = !isSameDay(start, end);
+  const days = differenceInCalendarDays(end, start) + 1;
+  const diffFromToday = differenceInCalendarDays(
+    startOfDay(start),
+    startOfDay(new Date())
+  );
+
+  let dateLabel: string;
+  if (!multi) {
+    dateLabel = format(start, "EEEE, MMMM d, yyyy");
+  } else if (isSameMonth(start, end)) {
+    dateLabel = `${format(start, "MMM d")} – ${format(end, "d")}, ${format(start, "yyyy")}`;
+  } else if (isSameYear(start, end)) {
+    dateLabel = `${format(start, "MMM d")} – ${format(end, "MMM d")}, ${format(start, "yyyy")}`;
+  } else {
+    dateLabel = `${format(start, "MMM d, yyyy")} – ${format(end, "MMM d, yyyy")}`;
+  }
+
+  let timeLabel: string;
+  if (event.allDay) {
+    timeLabel = multi ? `All day · ${days} days` : "All day";
+  } else if (multi) {
+    timeLabel = `${format(start, "h:mm a")} – ${format(end, "h:mm a")} daily · ${days} days`;
+  } else {
+    const diffMs = end.getTime() - start.getTime();
+    const hours = Math.floor(diffMs / 3_600_000);
+    const mins = Math.floor((diffMs % 3_600_000) / 60_000);
+    const dur =
+      hours > 0 && mins > 0
+        ? `${hours}h ${mins}m`
+        : hours > 0
+          ? `${hours}h`
+          : `${mins}m`;
+    timeLabel = `${format(start, "h:mm a")} – ${format(end, "h:mm a")} · ${dur}`;
+  }
+
+  let relLabel = "";
+  if (diffFromToday === 0) relLabel = "Today";
+  else if (diffFromToday === 1) relLabel = "Tomorrow";
+  else if (diffFromToday > 1 && diffFromToday <= 7)
+    relLabel = `In ${diffFromToday} days`;
+  else if (diffFromToday > 7 && diffFromToday <= 14) relLabel = "Next week";
+  else if (diffFromToday < 0) relLabel = "Past event";
 
   return (
     <PublicLayout workspaceName={event.workspaceName}>
-      {/* Back link */}
-      <Link
-        to={`/events/${workspaceId}`}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        All events
+      <Link href={`/events/${workspaceId}`}>
+        <HStack gap={1} align="center">
+          <Icon icon={ArrowLeft} size="sm" />
+          <Text type="supporting">All events</Text>
+        </HStack>
       </Link>
 
-      {/* Event banner card */}
-      <Card className="overflow-hidden mb-6">
-        <div className="h-2" style={{ backgroundColor: event.color }} />
-        <CardContent className="pt-6 pb-6">
-          {/* Category + status badges */}
-          <div className="flex items-center gap-2 mb-3">
-            <EventCategoryBadge category={event.category} />
-            {event.isPublic && (
-              <Badge variant="outline" className="gap-1">
-                <Globe className="h-3 w-3" />
-                Public
-              </Badge>
-            )}
-          </div>
+      {/* Header */}
+      <VStack gap={3}>
+        <HStack gap={2} align="center" wrap="wrap">
+          <Token
+            label={EVENT_CATEGORY_LABELS[event.category]}
+            color={CATEGORY_TOKEN_COLOR[event.category]}
+          />
+          {event.isPublic && <Badge variant="blue" label="Public" />}
+          {relLabel && <Badge variant="neutral" label={relLabel} />}
+        </HStack>
+        <Heading level={1} type="display-3">
+          {event.title}
+        </Heading>
+      </VStack>
 
-          {/* Title */}
-          <h1 className="text-2xl font-bold tracking-tight">{event.title}</h1>
+      {/* Details */}
+      <MetadataList columns="single" label={{ position: "start", width: 120 }}>
+        <MetadataListItem label="When" icon={<Icon icon="calendar" size="sm" />}>
+          <VStack gap={0.5}>
+            <Timestamp
+              value={start.toISOString()}
+              format={event.allDay ? "date" : "date_time"}
+              type="body"
+              color="primary"
+            />
+            <Text type="supporting">{`${dateLabel} · ${timeLabel}`}</Text>
+          </VStack>
+        </MetadataListItem>
+        {event.location && (
+          <MetadataListItem label="Where" icon={<Icon icon={MapPin} size="sm" />}>
+            <Text>{event.location}</Text>
+          </MetadataListItem>
+        )}
+      </MetadataList>
 
-          {/* Info rows */}
-          <div className="grid gap-3 mt-5">
-            {/* When */}
-            {(() => {
-              const multi = !isSameDay(start, end);
-              const days = differenceInCalendarDays(end, start) + 1;
-              const diffFromToday = differenceInCalendarDays(
-                startOfDay(start),
-                startOfDay(new Date())
-              );
+      {/* Description */}
+      {event.description && (
+        <VStack gap={2}>
+          <Divider />
+          <Heading level={3}>About this event</Heading>
+          <Markdown>{event.description}</Markdown>
+        </VStack>
+      )}
 
-              let dateLabel: string;
-              if (!multi) {
-                dateLabel = format(start, "EEEE, MMMM d, yyyy");
-              } else if (isSameMonth(start, end)) {
-                dateLabel = `${format(start, "EEE")} – ${format(end, "EEE")}, ${format(start, "MMM d")} – ${format(end, "d")}, ${format(start, "yyyy")}`;
-              } else if (isSameYear(start, end)) {
-                dateLabel = `${format(start, "MMM d")} – ${format(end, "MMM d")}, ${format(start, "yyyy")}`;
-              } else {
-                dateLabel = `${format(start, "MMM d, yyyy")} – ${format(end, "MMM d, yyyy")}`;
-              }
+      <Divider />
 
-              let timeLabel: string;
-              if (event.allDay) {
-                timeLabel = multi ? `All day · ${days} days` : "All day";
-              } else if (multi) {
-                timeLabel = `${format(start, "h:mm a")} – ${format(end, "h:mm a")} daily · ${days} days`;
-              } else {
-                const diffMs = end.getTime() - start.getTime();
-                const hours = Math.floor(diffMs / 3_600_000);
-                const mins = Math.floor((diffMs % 3_600_000) / 60_000);
-                const dur =
-                  hours > 0 && mins > 0
-                    ? `${hours}h ${mins}m`
-                    : hours > 0
-                      ? `${hours}h`
-                      : `${mins}m`;
-                timeLabel = `${format(start, "h:mm a")} – ${format(end, "h:mm a")} · ${dur}`;
-              }
-
-              let relLabel = "";
-              if (diffFromToday === 0) relLabel = "Today";
-              else if (diffFromToday === 1) relLabel = "Tomorrow";
-              else if (diffFromToday > 1 && diffFromToday <= 7)
-                relLabel = `In ${diffFromToday} days`;
-              else if (diffFromToday > 7 && diffFromToday <= 14)
-                relLabel = "Next week";
-              else if (diffFromToday < 0) relLabel = "Past event";
-
-              return (
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                    <CalendarDays className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium">{dateLabel}</p>
-                      {relLabel && (
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                          {relLabel}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                      <Clock className="h-3 w-3" />
-                      {timeLabel}
-                    </p>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Location */}
-            {event.location && (
-              <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                  <MapPin className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">{event.location}</p>
-                  <p className="text-xs text-muted-foreground">Location</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Description */}
-          {event.description && (
-            <>
-              <Separator className="my-5" />
-              <div>
-                <h3 className="text-sm font-semibold mb-2">About this event</h3>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                  {event.description}
-                </p>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Registration section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Registration</h2>
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            {spotsLeft !== null ? (
-              <Badge variant={spotsLeft > 0 ? "secondary" : "destructive"}>
-                {spotsLeft > 0
+      {/* Registration */}
+      <VStack gap={4}>
+        <HStack justify="between" align="center" wrap="wrap" gap={2}>
+          <Heading level={2}>Registration</Heading>
+          {spotsLeft !== null ? (
+            <Badge
+              variant={spotsLeft > 0 ? "info" : "error"}
+              label={
+                spotsLeft > 0
                   ? `${spotsLeft} spot${spotsLeft === 1 ? "" : "s"} left`
-                  : "Event is full"}
-              </Badge>
-            ) : (
-              <Badge variant="secondary">Open registration</Badge>
-            )}
-          </div>
-        </div>
+                  : "Event is full"
+              }
+            />
+          ) : (
+            <Badge variant="info" label="Open registration" />
+          )}
+        </HStack>
 
-        {/* Capacity progress bar */}
         {event.maxRegistrations != null && (
-          <div className="space-y-1.5">
-            <Progress value={spotsPercent} className="h-2" />
-            <p className="text-xs text-muted-foreground">
-              {registrationCount} / {event.maxRegistrations} registered
-            </p>
-          </div>
+          <ProgressBar
+            label="Registration capacity"
+            value={registrationCount}
+            max={event.maxRegistrations}
+            hasValueLabel
+            formatValueLabel={(v, m) => `${v} / ${m} registered`}
+            variant={
+              spotsLeft !== null && spotsLeft <= 0 ? "error" : "accent"
+            }
+          />
         )}
 
         {event.registrationOpen && event.isPublic ? (
@@ -295,25 +263,21 @@ export default function PublicEventPage() {
             spotsLeft={spotsLeft}
           />
         ) : (
-          <Card>
-            <CardContent className="py-10 text-center space-y-2">
-              <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center mx-auto">
-                <CalendarDays className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium">
-                {!event.registrationOpen
-                  ? "Registration is closed"
-                  : "Not open for registration"}
-              </p>
-              <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-                {!event.registrationOpen
-                  ? "Registration for this event has ended. Contact the organizer for more information."
-                  : "This event is not accepting public registrations at this time."}
-              </p>
-            </CardContent>
-          </Card>
+          <Banner
+            status="info"
+            title={
+              !event.registrationOpen
+                ? "Registration is closed"
+                : "Not open for registration"
+            }
+            description={
+              !event.registrationOpen
+                ? "Registration for this event has ended. Contact the organizer for more information."
+                : "This event is not accepting public registrations at this time."
+            }
+          />
         )}
-      </div>
+      </VStack>
     </PublicLayout>
   );
 }

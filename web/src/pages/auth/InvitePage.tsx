@@ -1,15 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth";
 import { getInviteByToken, acceptInvite, upsertUserProfile, getUserWorkspace } from "@/lib/firestore";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import PasswordRequirements, { isPasswordValid } from "@/components/auth/PasswordRequirements";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { toast } from "@/components/system/toast";
 import type { Invite } from "@/lib/types";
+import { AppShell } from "@astryxdesign/core/AppShell";
+import { Center } from "@astryxdesign/core/Center";
+import { VStack } from "@astryxdesign/core/VStack";
+import { HStack } from "@astryxdesign/core/HStack";
+import { Card } from "@astryxdesign/core/Card";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Button } from "@astryxdesign/core/Button";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Thumbnail } from "@astryxdesign/core/Thumbnail";
+
+/** Shared full-bleed centered shell for every InvitePage state. */
+function InviteShell({ children }: { children: ReactNode }) {
+  return (
+    <AppShell contentPadding={4}>
+      <Center axis="both" height="100%">
+        <VStack gap={4} hAlign="center" width="100%" maxWidth={400}>
+          {children}
+        </VStack>
+      </Center>
+    </AppShell>
+  );
+}
 
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
@@ -36,9 +57,19 @@ export default function InvitePage() {
 
   const emailMatch = user?.email?.toLowerCase() === invite?.email?.toLowerCase();
 
-  const handleAccept = async (e: React.FormEvent) => {
+  const handleAccept = async (e: FormEvent) => {
     e.preventDefault();
     if (!invite) return;
+    if (!user) {
+      if (mode === "signup" && !name.trim()) {
+        toast.error("Enter your name");
+        return;
+      }
+      if (!password) {
+        toast.error("Enter a password");
+        return;
+      }
+    }
     setAccepting(true);
     try {
       let uid = user?.uid;
@@ -75,103 +106,106 @@ export default function InvitePage() {
     }
   };
 
-  if (fetching) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="space-y-2 w-64">
-        <Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" />
-      </div>
-    </div>
-  );
+  if (fetching) {
+    return (
+      <InviteShell>
+        <Spinner size="lg" label="Loading invite..." />
+      </InviteShell>
+    );
+  }
 
-  if (invalid) return (
-    <div className="min-h-screen flex items-center justify-center text-center px-4">
-      <div className="space-y-3">
-        <h1 className="text-xl font-semibold">Invalid or expired invite</h1>
-        <p className="text-sm text-muted-foreground">Ask your admin to send a new invite link.</p>
-        <Button onClick={() => navigate("/login")}>Go to login</Button>
-      </div>
-    </div>
-  );
+  if (invalid) {
+    return (
+      <InviteShell>
+        <EmptyState
+          title="Invalid or expired invite"
+          description="Ask your admin to send a new invite link."
+          actions={<Button label="Go to login" variant="primary" onClick={() => navigate("/login")} />}
+        />
+      </InviteShell>
+    );
+  }
 
   // Logged in but as the wrong user
-  if (user && !emailMatch) return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6 text-center">
-        <div className="flex items-center justify-center mb-6">
-          <img src="/flowtask.png" alt="FlowTask" className="h-12" />
-        </div>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold">Wrong account</h1>
-          <p className="text-sm text-muted-foreground">
-            This invite is for <span className="font-medium text-foreground">{invite?.email}</span>, but you&apos;re signed in as <span className="font-medium text-foreground">{user.email}</span>.
-          </p>
-        </div>
-        <Button className="w-full" onClick={() => signOut()}>
-          Sign out &amp; continue
-        </Button>
-      </div>
-    </div>
-  );
+  if (user && !emailMatch) {
+    return (
+      <InviteShell>
+        <Thumbnail src="/flowtask.png" alt="FlowTask" label="FlowTask" />
+        <EmptyState
+          title="Wrong account"
+          description={`This invite is for ${invite?.email}, but you're signed in as ${user.email}.`}
+          actions={<Button label="Sign out & continue" variant="primary" clickAction={() => signOut()} />}
+        />
+      </InviteShell>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center space-y-2">
-          <div className="flex items-center justify-center mb-6">
-            <img src="/flowtask.png" alt="FlowTask" className="h-12" />
-          </div>
-          <h1 className="text-2xl font-semibold">You&apos;re invited</h1>
-          <p className="text-sm text-muted-foreground">
-            Join <span className="font-medium text-foreground">{invite?.workspaceName}</span> on FlowTask
-          </p>
-        </div>
-        <form onSubmit={handleAccept} className="space-y-4">
-          {user && emailMatch && (
-            <p className="text-sm text-center text-muted-foreground">
-              Signed in as <span className="font-medium text-foreground">{user.email}</span>
-            </p>
-          )}
-          {!user && (
-            <>
-              {mode === "signup" && (
-                <div className="space-y-2">
-                  <Label>Your name</Label>
-                  <Input placeholder="Jane Smith" value={name} onChange={(e) => setName(e.target.value)} required />
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input type="email" value={invite?.email ?? ""} disabled />
-              </div>
-              <div className="space-y-2">
-                <Label>{mode === "signup" ? "Create a password" : "Password"}</Label>
-                <Input type="password" placeholder="••••••••" value={password}
-                  onChange={(e) => setPassword(e.target.value)} required minLength={mode === "signup" ? 6 : 1} />
-                {mode === "signup" && <PasswordRequirements password={password} />}
-              </div>
-              <p className="text-xs text-center text-muted-foreground">
-                {mode === "signup" ? (
-                  <>Already have an account?{" "}
-                    <button type="button" className="text-primary underline" onClick={() => setMode("login")}>
-                      Sign in instead
-                    </button>
-                  </>
-                ) : (
-                  <>Don&apos;t have an account?{" "}
-                    <button type="button" className="text-primary underline" onClick={() => setMode("signup")}>
-                      Create one
-                    </button>
-                  </>
+    <InviteShell>
+      <VStack gap={2} hAlign="center">
+        <Thumbnail src="/flowtask.png" alt="FlowTask" label="FlowTask" />
+        <Heading level={1}>You&apos;re invited</Heading>
+        <Text type="supporting" color="secondary" justify="center">
+          Join {invite?.workspaceName} on FlowTask
+        </Text>
+      </VStack>
+
+      <Card padding={8} width="100%">
+        <form onSubmit={handleAccept}>
+          <FormLayout>
+            {user && emailMatch && (
+              <Text type="supporting" color="secondary" justify="center">
+                Signed in as {user.email}
+              </Text>
+            )}
+            {!user && (
+              <>
+                {mode === "signup" && (
+                  <TextInput
+                    label="Your name"
+                    placeholder="Jane Smith"
+                    value={name}
+                    onChange={setName}
+                    isRequired
+                    hasAutoFocus
+                  />
                 )}
-              </p>
-            </>
-          )}
-          <Button type="submit" className="w-full" disabled={accepting || authLoading || (!user && mode === "signup" && !isPasswordValid(password))}>
-            {(accepting || authLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {user ? "Accept invite & join workspace" : mode === "signup" ? "Sign up & join workspace" : "Sign in & join workspace"}
-          </Button>
+                <TextInput label="Email" type="email" value={invite?.email ?? ""} isDisabled />
+                <VStack gap={1}>
+                  <TextInput
+                    label={mode === "signup" ? "Create a password" : "Password"}
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={setPassword}
+                    isRequired
+                  />
+                  {mode === "signup" && <PasswordRequirements password={password} />}
+                </VStack>
+                <HStack gap={1} justify="center">
+                  <Text type="supporting" color="secondary">
+                    {mode === "signup" ? "Already have an account?" : "Don't have an account?"}
+                  </Text>
+                  <Button
+                    label={mode === "signup" ? "Sign in instead" : "Create one"}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMode(mode === "signup" ? "login" : "signup")}
+                  />
+                </HStack>
+              </>
+            )}
+            <Button
+              type="submit"
+              label={user ? "Accept invite & join workspace" : mode === "signup" ? "Sign up & join workspace" : "Sign in & join workspace"}
+              variant="primary"
+              width="100%"
+              isLoading={accepting || authLoading}
+              isDisabled={!user && mode === "signup" && !isPasswordValid(password)}
+            />
+          </FormLayout>
         </form>
-      </div>
-    </div>
+      </Card>
+    </InviteShell>
   );
 }

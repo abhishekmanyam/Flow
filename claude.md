@@ -1,1 +1,1 @@
-only use shadcn for ui components and frontend. no custom css.
+only use the Astryx design system (@astryxdesign/core, theme-neutral) for ui components and frontend. no custom css, no tailwind, no shadcn. component props only — xstyle/stylex is NOT compiled in this build and crashes at runtime. binding design rules and sanctioned exceptions: web/DESIGN_SPEC.md. discover components with `npx astryx component <Name>` / `npx astryx build "<surface>"`.

@@ -1,9 +1,22 @@
-import { useEffect, useState } from "react";
-import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { STATUS_COLORS, TASK_STATUS_LABELS, PRIORITY_COLORS, TASK_PRIORITY_LABELS } from "@/lib/types";
-import type { Task } from "@/lib/types";
+import { useEffect, useMemo, useState } from "react";
+import { CommandPalette, CommandPaletteInput } from "@astryxdesign/core/CommandPalette";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Text } from "@astryxdesign/core/Text";
+import { HStack } from "@astryxdesign/core/HStack";
+import type { SearchSource, SearchableItem } from "@astryxdesign/core/Typeahead";
+import { TASK_STATUS_LABELS } from "@/lib/types";
+import PriorityIcon from "@/components/tasks/PriorityIcon";
+import type { Task, TaskStatus } from "@/lib/types";
+
+const STATUS_VARIANT: Record<TaskStatus, "neutral" | "info" | "warning" | "success"> = {
+  backlog: "neutral",
+  todo: "neutral",
+  in_progress: "info",
+  in_review: "warning",
+  done: "success",
+};
+
+type TaskItem = SearchableItem<Record<string, never>>;
 
 interface TaskSearchProps {
   tasks: Task[];
@@ -24,32 +37,51 @@ export default function TaskSearch({ tasks, onSelect }: TaskSearchProps) {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const tasksById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+
+  const source = useMemo<SearchSource>(() => {
+    const toItem = (t: Task): TaskItem => ({ id: t.id, label: t.title });
+    return {
+      search(query: string) {
+        const q = query.toLowerCase();
+        return tasks
+          .filter((t) => `${t.title} ${t.description ?? ""}`.toLowerCase().includes(q))
+          .slice(0, 50)
+          .map(toItem);
+      },
+      bootstrap() {
+        return tasks.slice(0, 20).map(toItem);
+      },
+    };
+  }, [tasks]);
+
   const handleSelect = (taskId: string) => {
     setOpen(false);
     onSelect(taskId);
   };
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Search tasks by title or description..." />
-      <CommandList>
-        <CommandEmpty>No tasks found</CommandEmpty>
-        <CommandGroup heading="Tasks">
-          {tasks.map((task) => (
-            <CommandItem key={task.id} value={`${task.title} ${task.description ?? ""}`} onSelect={() => handleSelect(task.id)}>
-              <div className="flex items-center gap-2 w-full min-w-0">
-                <Badge variant="secondary" className={cn("text-[9px] shrink-0", STATUS_COLORS[task.status])}>
-                  {TASK_STATUS_LABELS[task.status]}
-                </Badge>
-                <span className="truncate flex-1 text-sm">{task.title}</span>
-                <span className={cn("text-[10px] shrink-0", PRIORITY_COLORS[task.priority])}>
-                  {TASK_PRIORITY_LABELS[task.priority]}
-                </span>
-              </div>
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      </CommandList>
-    </CommandDialog>
+    <CommandPalette
+      isOpen={open}
+      onOpenChange={setOpen}
+      searchSource={source}
+      onValueChange={handleSelect}
+      input={<CommandPaletteInput placeholder="Search tasks by title or description..." />}
+      emptyBootstrapText="Type to search tasks"
+      emptySearchText="No tasks found"
+      renderItem={(item) => {
+        const task = tasksById.get(item.id);
+        if (!task) return <Text type="body">{item.label}</Text>;
+        return (
+          <HStack gap={2} align="center" width="fill">
+            <Badge variant={STATUS_VARIANT[task.status]} label={TASK_STATUS_LABELS[task.status]} />
+            <HStack width="fill">
+              <Text type="body" maxLines={1}>{task.title}</Text>
+            </HStack>
+            {task.priority !== "none" && <PriorityIcon priority={task.priority} />}
+          </HStack>
+        );
+      }}
+    />
   );
 }

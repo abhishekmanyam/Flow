@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
 import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { subscribeToNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/firestore";
-import { formatDistanceToNow } from "date-fns";
 import type { Notification } from "@/lib/types";
+import { Popover } from "@astryxdesign/core/Popover";
+import { Button } from "@astryxdesign/core/Button";
+import { Badge } from "@astryxdesign/core/Badge";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Divider } from "@astryxdesign/core/Divider";
+import { List } from "@astryxdesign/core/List";
+import { ListItem } from "@astryxdesign/core/List";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { Timestamp } from "@astryxdesign/core/Timestamp";
 
 function notifLabel(n: Notification) {
   switch (n.type) {
@@ -14,6 +22,12 @@ function notifLabel(n: Notification) {
     case "due_soon": return `"${n.taskTitle}" is due soon`;
     default: return "New notification";
   }
+}
+
+function notifDate(n: Notification): string {
+  const raw = n.createdAt as unknown as { toDate?: () => Date };
+  const d = typeof raw?.toDate === "function" ? raw.toDate() : new Date(n.createdAt as unknown as string);
+  return d.toISOString();
 }
 
 export default function NotificationBell({ userId }: { userId: string }) {
@@ -33,51 +47,53 @@ export default function NotificationBell({ userId }: { userId: string }) {
     await markNotificationRead(userId, id);
   };
 
+  const count = notifications.length;
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 relative shrink-0">
-          <Bell className="h-4 w-4" />
-          {notifications.length > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center font-medium">
-              {notifications.length > 9 ? "9+" : notifications.length}
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h3 className="font-semibold text-sm">Notifications</h3>
-          {notifications.length > 0 && (
-            <button onClick={handleMarkAll} className="text-xs text-muted-foreground hover:text-foreground">
-              Mark all read
-            </button>
-          )}
-        </div>
-        <ScrollArea className="max-h-80">
-          {notifications.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">All caught up!</p>
+    <Popover
+      isOpen={open}
+      onOpenChange={setOpen}
+      placement="above"
+      alignment="start"
+      width={340}
+      label="Notifications"
+      hasCloseButton={false}
+      content={
+        <VStack gap={0}>
+          <HStack justify="between" align="center" paddingInline={4} paddingBlock={3}>
+            <Heading level={4}>Notifications</Heading>
+            {count > 0 && (
+              <Button label="Mark all read" variant="ghost" size="sm" onClick={handleMarkAll} />
+            )}
+          </HStack>
+          <Divider />
+          {count === 0 ? (
+            <HStack justify="center" paddingBlock={6} paddingInline={4}>
+              <Text type="supporting">All caught up!</Text>
+            </HStack>
           ) : (
-            <div className="divide-y">
+            <List hasDividers density="compact">
               {notifications.map((n) => (
-                <div key={n.id} className="flex gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer"
-                  onClick={() => handleMarkOne(n.id)}>
-                  <div className="h-2 w-2 rounded-full bg-primary mt-1.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm leading-snug">{notifLabel(n)}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatDistanceToNow(
-                        (n.createdAt as unknown as { toDate(): Date }).toDate?.() ?? new Date(n.createdAt as unknown as string),
-                        { addSuffix: true }
-                      )}
-                    </p>
-                  </div>
-                </div>
+                <ListItem
+                  key={n.id}
+                  label={notifLabel(n)}
+                  description={<Timestamp value={notifDate(n)} format="relative" />}
+                  startContent={<StatusDot variant="accent" label="Unread" />}
+                  onClick={() => handleMarkOne(n.id)}
+                />
               ))}
-            </div>
+            </List>
           )}
-        </ScrollArea>
-      </PopoverContent>
+        </VStack>
+      }
+    >
+      <Button
+        label="Notifications"
+        variant="ghost"
+        size="sm"
+        icon={<Bell size={16} />}
+        endContent={count > 0 ? <Badge variant="error" label={count > 9 ? "9+" : count} /> : undefined}
+      />
     </Popover>
   );
 }

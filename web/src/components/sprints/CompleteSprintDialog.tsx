@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Layout, LayoutContent, LayoutFooter } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Banner } from "@astryxdesign/core/Banner";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Button } from "@astryxdesign/core/Button";
+import { toast } from "@/components/system/toast";
 import { completeSprint } from "@/lib/firestore";
 import type { Sprint, Task } from "@/lib/types";
 
@@ -44,40 +46,47 @@ export default function CompleteSprintDialog({
     }
   };
 
-  const doneCount = incompleteTasks.length === 0;
+  const allDone = incompleteTasks.length === 0;
+  const options = [
+    { value: "backlog", label: "Backlog" },
+    ...otherSprints.map((s) => ({ value: s.id, label: s.name })),
+  ];
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Complete {sprint.name}</DialogTitle>
-          <DialogDescription>
-            {doneCount
-              ? "All tasks in this sprint are done."
-              : `${incompleteTasks.length} task${incompleteTasks.length > 1 ? "s" : ""} are not completed.`}
-          </DialogDescription>
-        </DialogHeader>
-        {!doneCount && (
-          <div className="space-y-2">
-            <Label>Move incomplete tasks to</Label>
-            <Select value={moveToSprintId} onValueChange={setMoveToSprintId}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="backlog">Backlog</SelectItem>
-                {otherSprints.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <div className="flex gap-2 pt-2">
-          <Button onClick={handleComplete} disabled={loading} className="flex-1">
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Complete sprint
-          </Button>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-        </div>
-      </DialogContent>
+    <Dialog isOpen={open} onOpenChange={(v) => !v && onClose()} purpose="form" width={440}>
+      <Layout
+        header={<DialogHeader title={`Complete ${sprint.name}`} onOpenChange={(v) => !v && onClose()} />}
+        content={
+          <LayoutContent padding={4}>
+            <VStack gap={4}>
+              <Banner
+                status={allDone ? "success" : "warning"}
+                container="card"
+                title={allDone ? "All tasks complete" : `${incompleteTasks.length} task${incompleteTasks.length > 1 ? "s" : ""} not completed`}
+                description={allDone
+                  ? "All tasks in this sprint are done."
+                  : "Choose where to move the remaining tasks when this sprint closes."}
+              />
+              {!allDone && (
+                <Selector
+                  label="Move incomplete tasks to"
+                  options={options}
+                  value={moveToSprintId}
+                  onChange={setMoveToSprintId}
+                />
+              )}
+            </VStack>
+          </LayoutContent>
+        }
+        footer={
+          <LayoutFooter hasDivider>
+            <HStack gap={2} hAlign="end">
+              <Button label="Cancel" variant="secondary" onClick={onClose} />
+              <Button label="Complete sprint" variant="primary" isLoading={loading} clickAction={handleComplete} />
+            </HStack>
+          </LayoutFooter>
+        }
+      />
     </Dialog>
   );
 }

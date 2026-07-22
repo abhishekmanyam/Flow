@@ -1,6 +1,9 @@
-import { format } from "date-fns";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Text } from "@astryxdesign/core/Text";
+import { Badge } from "@astryxdesign/core/Badge";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { SPRINT_STATUS_LABELS } from "@/lib/types";
 import type { Sprint, Task } from "@/lib/types";
 
@@ -15,6 +18,12 @@ interface SprintHeaderProps {
   tasks: Task[];
 }
 
+const SPRINT_STATUS_VARIANT: Record<Sprint["status"], "neutral" | "success" | "info"> = {
+  planning: "neutral",
+  active: "info",
+  completed: "success",
+};
+
 export default function SprintHeader({ sprint, tasks }: SprintHeaderProps) {
   const total = tasks.length;
   const done = tasks.filter((t) => t.status === "done").length;
@@ -26,28 +35,35 @@ export default function SprintHeader({ sprint, tasks }: SprintHeaderProps) {
   const endDate = tsToDate(sprint.endDate);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <h3 className="font-semibold text-sm">{sprint.name}</h3>
-        <Badge variant="secondary" className="text-[10px]">
-          {SPRINT_STATUS_LABELS[sprint.status]}
-        </Badge>
+    <VStack gap={2}>
+      <HStack gap={2} align="center" wrap="wrap">
+        <Text type="body" weight="semibold">{sprint.name}</Text>
+        <Badge variant={SPRINT_STATUS_VARIANT[sprint.status]} label={SPRINT_STATUS_LABELS[sprint.status]} />
         {startDate && endDate && (
-          <span className="text-xs text-muted-foreground">
-            {format(startDate, "MMM d")} – {format(endDate, "MMM d")}
-          </span>
+          <HStack gap={1} align="center">
+            <Timestamp value={startDate.toISOString()} format="date" type="supporting" />
+            <Text type="supporting" color="secondary">–</Text>
+            <Timestamp value={endDate.toISOString()} format="date" type="supporting" />
+          </HStack>
         )}
-      </div>
+      </HStack>
       {sprint.goal && (
-        <p className="text-xs text-muted-foreground">{sprint.goal}</p>
+        <Text type="supporting" color="secondary" maxLines={2}>{sprint.goal}</Text>
       )}
-      <div className="flex items-center gap-3">
-        <Progress value={pct} className="flex-1 h-1.5" />
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {done}/{total} tasks
-          {totalPoints > 0 && ` · ${donePoints}/${totalPoints} pts`}
-        </span>
-      </div>
-    </div>
+      <VStack gap={1}>
+        <HStack justify="between" align="center">
+          <Text type="supporting" color="secondary">{done}/{total} tasks</Text>
+          {totalPoints > 0 && (
+            <Text type="supporting" color="secondary">{donePoints}/{totalPoints} pts</Text>
+          )}
+        </HStack>
+        <ProgressBar
+          label={`${sprint.name} progress`}
+          value={pct}
+          variant={pct === 100 ? "success" : "accent"}
+          isLabelHidden
+        />
+      </VStack>
+    </VStack>
   );
 }

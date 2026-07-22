@@ -13,25 +13,21 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import ProjectHeader from "@/components/projects/ProjectHeader";
 import RichTextEditor from "@/components/editor/RichTextEditor";
-import { MotionPage } from "@/components/ui/motion-page";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Layout, LayoutContent, LayoutHeader, LayoutFooter, LayoutPanel } from "@astryxdesign/core/Layout";
+import { HStack } from "@astryxdesign/core/HStack";
+import { VStack } from "@astryxdesign/core/VStack";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { Banner } from "@astryxdesign/core/Banner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Plus, FileText, Trash2, Globe } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 import type { Project, ProjectNote, UserProfile } from "@/lib/types";
 
 function tsToDate(ts: unknown): Date {
@@ -61,6 +57,7 @@ export default function SharedNotesPage() {
     new Map()
   );
   const [loaded, setLoaded] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Draft state for auto-save
   const [draftTitle, setDraftTitle] = useState("");
@@ -220,6 +217,7 @@ export default function SharedNotesPage() {
     if (!workspace || !projectId || !selectedId) return;
     await deleteNote(workspace.id, projectId, selectedId);
     setSelectedId(null);
+    setConfirmDelete(false);
   };
 
   // Determine if user can delete the selected note
@@ -230,185 +228,144 @@ export default function SharedNotesPage() {
 
   if (accessLoading || !workspace || !user) {
     return (
-      <div className="p-6 space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
+      <Layout>
+        <LayoutContent padding={4}>
+          <VStack gap={3}><Skeleton height={28} width={200} /><Skeleton height={360} /></VStack>
+        </LayoutContent>
+      </Layout>
     );
   }
 
   if (!hasAccess) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center space-y-2">
-          <h2 className="text-lg font-semibold">Access Denied</h2>
-          <p className="text-sm text-muted-foreground">
-            You don&apos;t have access to this project.
-          </p>
-        </div>
-      </div>
+      <Layout>
+        <LayoutContent padding={4}>
+          <Banner status="error" title="Access denied" description="You don't have access to this project." />
+        </LayoutContent>
+      </Layout>
     );
   }
 
   if (!project) {
     return (
-      <div className="p-6 space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
+      <Layout>
+        <LayoutContent padding={4}>
+          <VStack gap={3}><Skeleton height={28} width={200} /><Skeleton height={360} /></VStack>
+        </LayoutContent>
+      </Layout>
     );
   }
 
   return (
-    <MotionPage className="flex flex-col h-full">
-      <ProjectHeader
-        project={project}
-        workspaceSlug={slug!}
-        canEdit={canEdit}
-        isProjectAdmin={isProjectAdmin}
-      />
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar — note list */}
-        <div className="w-64 border-r flex flex-col">
-          <div className="p-3 border-b space-y-2">
-            <Button
-              size="sm"
-              className="w-full"
-              onClick={handleCreate}
-              disabled={!canEdit}
-            >
-              <Plus className="mr-1.5 h-4 w-4" />
-              New Note
-            </Button>
-            <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Globe className="h-3 w-3 shrink-0" />
-              Notes are visible to all project members
-            </p>
-          </div>
-          <ScrollArea className="flex-1">
-            {notes.length === 0 && loaded && (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                No notes yet
-              </div>
-            )}
-            {notes.map((note) => {
-              const ownerProfile = profiles.get(note.createdBy);
-              return (
-                <button
-                  key={note.id}
-                  onClick={() => setSelectedId(note.id)}
-                  className={`w-full text-left px-3 py-2.5 border-b transition-colors hover:bg-muted/50 ${
-                    selectedId === note.id
-                      ? "bg-muted"
-                      : ""
-                  }`}
-                >
-                  <p className="text-sm font-medium truncate">
-                    {note.title || "Untitled"}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">
-                    {ownerProfile?.name ?? "Unknown"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatDistanceToNow(tsToDate(note.updatedAt), {
-                      addSuffix: true,
-                    })}
-                  </p>
-                </button>
-              );
-            })}
-          </ScrollArea>
-        </div>
-
-        {/* Main area — editor */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {selectedNote ? (
-            <>
-              {/* Title + delete */}
-              <div className="flex items-center gap-2 px-6 pt-4 pb-2">
-                {canEdit ? (
-                  <Input
-                    value={draftTitle}
-                    onChange={(e) => handleTitleChange(e.target.value)}
-                    placeholder="Note title"
-                    className="text-lg font-semibold border-none shadow-none focus-visible:ring-0 px-0 h-auto"
-                  />
-                ) : (
-                  <h2 className="text-lg font-semibold flex-1">
-                    {selectedNote.title || "Untitled"}
-                  </h2>
-                )}
-                {canDeleteSelected && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete note</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will permanently delete &ldquo;{selectedNote.title || "Untitled"}&rdquo;. This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete}>
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-              </div>
-
-              {/* Editor */}
-              <div className="flex-1 overflow-auto px-6 pb-4">
-                <RichTextEditor
-                  content={draftContent}
-                  onChange={handleContentChange}
-                  editable={canEdit}
-                  placeholder="Start writing..."
-                />
-              </div>
-
-              {/* Footer — metadata */}
-              <div className="px-6 py-2 border-t text-xs text-muted-foreground flex items-center gap-4">
-                <span>
-                  Created by{" "}
-                  {profiles.get(selectedNote.createdBy)?.name ?? "Unknown"}
-                </span>
-                {selectedNote.updatedAt && (
-                  <span>
-                    Updated{" "}
-                    {profiles.get(selectedNote.updatedBy)?.name
-                      ? `by ${profiles.get(selectedNote.updatedBy)!.name} `
-                      : ""}
-                    {formatDistanceToNow(tsToDate(selectedNote.updatedAt), {
-                      addSuffix: true,
-                    })}
-                  </span>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <EmptyState
-                icon={FileText}
-                title="No note selected"
-                description={
-                  canEdit
-                    ? "Select a note from the sidebar or create a new one"
-                    : "Select a note from the sidebar to view it"
+    <>
+    <Layout
+      header={<ProjectHeader project={project} workspaceSlug={slug!} canEdit={canEdit} isProjectAdmin={isProjectAdmin} />}
+      content={
+        <Layout
+          start={
+            <LayoutPanel width={264} hasDivider isScrollable padding={0}>
+              <VStack gap={2} padding={3}>
+                <Button label="New Note" variant="primary" size="sm" width="100%" icon={<Plus size={16} />} isDisabled={!canEdit} onClick={handleCreate} />
+                <HStack gap={1} align="center">
+                  <Globe size={12} />
+                  <Text type="supporting" color="secondary">Notes are visible to all project members</Text>
+                </HStack>
+              </VStack>
+              {notes.length === 0 && loaded ? (
+                <VStack padding={4} align="center">
+                  <Text type="supporting" color="secondary">No notes yet</Text>
+                </VStack>
+              ) : (
+                <List hasDividers>
+                  {notes.map((note) => {
+                    const ownerProfile = profiles.get(note.createdBy);
+                    return (
+                      <ListItem
+                        key={note.id}
+                        isSelected={selectedId === note.id}
+                        onClick={() => setSelectedId(note.id)}
+                        label={note.title || "Untitled"}
+                        description={
+                          <VStack gap={0}>
+                            <Text type="supporting" color="secondary">{ownerProfile?.name ?? "Unknown"}</Text>
+                            <Timestamp value={tsToDate(note.updatedAt).toISOString()} format="relative" type="supporting" />
+                          </VStack>
+                        }
+                      />
+                    );
+                  })}
+                </List>
+              )}
+            </LayoutPanel>
+          }
+          content={
+            selectedNote ? (
+              <Layout
+                header={
+                  <LayoutHeader hasDivider>
+                    <HStack justify="between" align="center" gap={2} paddingInline={5} paddingBlock={3}>
+                      {canEdit ? (
+                        <TextInput label="Note title" isLabelHidden value={draftTitle} onChange={handleTitleChange} placeholder="Note title" />
+                      ) : (
+                        <Heading level={2}>{selectedNote.title || "Untitled"}</Heading>
+                      )}
+                      {canDeleteSelected && (
+                        <IconButton label="Delete note" variant="ghost" icon={<Trash2 size={16} />} onClick={() => setConfirmDelete(true)} />
+                      )}
+                    </HStack>
+                  </LayoutHeader>
                 }
-                className="py-16"
+                content={
+                  <LayoutContent padding={5}>
+                    <RichTextEditor
+                      content={draftContent}
+                      onChange={handleContentChange}
+                      editable={canEdit}
+                      placeholder="Start writing..."
+                    />
+                  </LayoutContent>
+                }
+                footer={
+                  <LayoutFooter hasDivider>
+                    <HStack gap={4} align="center" paddingInline={5} paddingBlock={2}>
+                      <Text type="supporting" color="secondary">
+                        Created by {profiles.get(selectedNote.createdBy)?.name ?? "Unknown"}
+                      </Text>
+                      {selectedNote.updatedAt && (
+                        <HStack gap={1} align="center">
+                          <Text type="supporting" color="secondary">
+                            Updated{profiles.get(selectedNote.updatedBy)?.name ? ` by ${profiles.get(selectedNote.updatedBy)!.name}` : ""}
+                          </Text>
+                          <Timestamp value={tsToDate(selectedNote.updatedAt).toISOString()} format="relative" type="supporting" />
+                        </HStack>
+                      )}
+                    </HStack>
+                  </LayoutFooter>
+                }
               />
-            </div>
-          )}
-        </div>
-      </div>
-    </MotionPage>
+            ) : (
+              <LayoutContent padding={4}>
+                <EmptyState
+                  icon={<FileText size={28} />}
+                  title="No note selected"
+                  description={canEdit
+                    ? "Select a note from the sidebar or create a new one"
+                    : "Select a note from the sidebar to view it"}
+                />
+              </LayoutContent>
+            )
+          }
+        />
+      }
+    />
+    <AlertDialog
+      isOpen={confirmDelete}
+      onOpenChange={setConfirmDelete}
+      title="Delete note"
+      description={`This will permanently delete "${selectedNote?.title || "Untitled"}". This action cannot be undone.`}
+      actionLabel="Delete"
+      onAction={handleDelete}
+    />
+    </>
   );
 }
