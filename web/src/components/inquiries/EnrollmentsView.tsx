@@ -34,6 +34,11 @@ import { Spinner } from "@astryxdesign/core/Spinner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import {
+  Layout,
+  LayoutContent,
+  LayoutFooter,
+} from "@astryxdesign/core/Layout";
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import {
   Table,
@@ -323,57 +328,70 @@ export default function EnrollmentsView() {
         purpose="form"
       >
         {selected && (
-          <VStack gap={0}>
-            <DialogHeader
-              title={selected.childName}
-              onOpenChange={(o) => !o && setSelected(null)}
-            />
-            <VStack gap={5} padding={5}>
-              <MetadataList columns="multi">
-                <MetadataListItem label="Age">{`${selected.childAge}`}</MetadataListItem>
-                <MetadataListItem label="Plan">
-                  {ENROLLMENT_PLAN_LABELS[selected.plan]}
-                </MetadataListItem>
-                <MetadataListItem label="Parent">{selected.parentName}</MetadataListItem>
-                <MetadataListItem label="Phone">{selected.parentPhone}</MetadataListItem>
-                <MetadataListItem label="Email">{selected.parentEmail}</MetadataListItem>
-                <MetadataListItem label="Submitted">
-                  {selected.createdAt?.toDate
-                    ? format(selected.createdAt.toDate(), "MMM d, yyyy · h:mm a")
-                    : "—"}
-                </MetadataListItem>
-              </MetadataList>
-
-              <Selector
-                label="Status"
-                value={selected.status}
-                onChange={(v) =>
-                  handleStatusChange(selected.id, v as EnrollmentStatus)
-                }
-                options={STATUSES.map((s) => ({
-                  value: s,
-                  label: CAMP_REG_STATUS_LABELS[s],
-                }))}
+          <Layout
+            header={
+              <DialogHeader
+                title={selected.childName}
+                onOpenChange={(o) => !o && setSelected(null)}
               />
+            }
+            content={
+              <LayoutContent>
+                <VStack gap={5}>
+                  <MetadataList columns="multi">
+                    <MetadataListItem label="Age">{`${selected.childAge}`}</MetadataListItem>
+                    <MetadataListItem label="Plan">
+                      {ENROLLMENT_PLAN_LABELS[selected.plan]}
+                    </MetadataListItem>
+                    <MetadataListItem label="Parent">{selected.parentName}</MetadataListItem>
+                    <MetadataListItem label="Phone">{selected.parentPhone}</MetadataListItem>
+                    <MetadataListItem label="Email">{selected.parentEmail}</MetadataListItem>
+                    <MetadataListItem label="Submitted">
+                      {selected.createdAt?.toDate
+                        ? format(selected.createdAt.toDate(), "MMM d, yyyy · h:mm a")
+                        : "—"}
+                    </MetadataListItem>
+                  </MetadataList>
 
-              <TextArea
-                label="Notes"
-                placeholder="Internal notes…"
-                rows={4}
-                value={notesDraft}
-                onChange={setNotesDraft}
-              />
+                  <Selector
+                    label="Status"
+                    value={selected.status}
+                    onChange={(v) =>
+                      handleStatusChange(selected.id, v as EnrollmentStatus)
+                    }
+                    options={STATUSES.map((s) => ({
+                      value: s,
+                      label: CAMP_REG_STATUS_LABELS[s],
+                    }))}
+                  />
 
-              <HStack justify="end" gap={2}>
-                <Button
-                  label="Close"
-                  variant="secondary"
-                  onClick={() => setSelected(null)}
-                />
-                <Button label="Save notes" variant="primary" onClick={handleSaveNotes} />
-              </HStack>
-            </VStack>
-          </VStack>
+                  <TextArea
+                    label="Notes"
+                    placeholder="Internal notes…"
+                    rows={4}
+                    value={notesDraft}
+                    onChange={setNotesDraft}
+                  />
+                </VStack>
+              </LayoutContent>
+            }
+            footer={
+              <LayoutFooter>
+                <HStack gap={2} hAlign="end">
+                  <Button
+                    label="Close"
+                    variant="secondary"
+                    onClick={() => setSelected(null)}
+                  />
+                  <Button
+                    label="Save notes"
+                    variant="primary"
+                    onClick={handleSaveNotes}
+                  />
+                </HStack>
+              </LayoutFooter>
+            }
+          />
         )}
       </Dialog>
 
