@@ -23,14 +23,20 @@ interface PublicRegistrationFormProps {
   spotsLeft?: number | null;
 }
 
+// Lenient on purpose: digits plus the usual separators, so international
+// formats like "+91 98765 43210" and "(555) 123-4567" both pass.
+const PHONE_RE = /^\+?[\d\s().-]{7,20}$/;
+
 function buildSchema(fields: RegistrationField[]) {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const f of fields) {
-    let v: z.ZodTypeAny = z.string();
-    if (f.type === "email") v = z.string().email("Invalid email address");
-    if (f.required) v = (v as z.ZodString).min(1, `${f.label} is required`);
-    else v = v.optional().or(z.literal(""));
-    shape[f.name] = v;
+    let s = z.string();
+    // Required check first so an empty field reports "is required" rather than
+    // a format complaint.
+    if (f.required) s = s.min(1, `${f.label || "This field"} is required`);
+    if (f.type === "email") s = s.email("Invalid email address");
+    if (f.type === "phone") s = s.regex(PHONE_RE, "Enter a valid phone number");
+    shape[f.name] = f.required ? s : s.optional().or(z.literal(""));
   }
   return z.object(shape);
 }
@@ -125,6 +131,7 @@ export default function PublicRegistrationForm({
                       isOptional={!field.required}
                       placeholder={field.placeholder || `Select ${field.label}`}
                       options={field.options ?? []}
+                      hasSearch={(field.options?.length ?? 0) > 8}
                       value={value}
                       onChange={rhf.onChange}
                       status={status}

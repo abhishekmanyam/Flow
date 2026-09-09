@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { RegistrationField, RegistrationFieldType } from "@/lib/types";
 import { REGISTRATION_FIELD_TYPE_LABELS } from "@/lib/types";
@@ -26,6 +27,13 @@ const TYPE_OPTIONS = (
   ][]
 ).map(([value, label]) => ({ value, label }));
 
+function parseOptions(text: string): string[] {
+  return text
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export default function RegistrationFieldEditor({
   field,
   onChange,
@@ -35,6 +43,34 @@ export default function RegistrationFieldEditor({
   isFirst = false,
   isLast = false,
 }: RegistrationFieldEditorProps) {
+  // The raw text is the source of truth while typing. Deriving the input value
+  // from `field.options.join("; ")` swallowed the separator: parsing "A;" back
+  // to ["A"] re-rendered the input as "A", so a second option could never be
+  // started.
+  const [optionsText, setOptionsText] = useState(
+    () => field.options?.join("; ") ?? ""
+  );
+
+  const handleTypeChange = (value: string) => {
+    const type = value as RegistrationFieldType;
+    if (type === "select") {
+      onChange({ ...field, type, options: parseOptions(optionsText) });
+      return;
+    }
+    // Never carry `options: undefined` — Firestore rejects undefined values and
+    // the whole event write fails ("Unsupported field value: undefined").
+    const { options: _options, ...rest } = field;
+    void _options;
+    onChange({ ...rest, type });
+  };
+
+  const handleOptionsChange = (value: string) => {
+    setOptionsText(value);
+    onChange({ ...field, options: parseOptions(value) });
+  };
+
+  const hasNoOptions = field.type === "select" && parseOptions(optionsText).length === 0;
+
   return (
     <VStack gap={2}>
       <HStack gap={2} align="end">
@@ -72,14 +108,7 @@ export default function RegistrationFieldEditor({
           size="sm"
           options={TYPE_OPTIONS}
           value={field.type}
-          onChange={(value) =>
-            onChange({
-              ...field,
-              type: value as RegistrationFieldType,
-              options:
-                value === "select" ? (field.options ?? []) : undefined,
-            })
-          }
+          onChange={handleTypeChange}
         />
 
         <Switch
@@ -102,16 +131,14 @@ export default function RegistrationFieldEditor({
           label="Dropdown options"
           isLabelHidden
           size="sm"
+          description="Separate each option with a semicolon"
           placeholder="Option 1; Option 2; Option 3"
-          value={field.options?.join("; ") ?? ""}
-          onChange={(value) =>
-            onChange({
-              ...field,
-              options: value
-                .split(";")
-                .map((s) => s.trim())
-                .filter(Boolean),
-            })
+          value={optionsText}
+          onChange={handleOptionsChange}
+          status={
+            hasNoOptions
+              ? { type: "warning", message: "Add at least one option" }
+              : undefined
           }
         />
       )}

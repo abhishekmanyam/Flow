@@ -18,6 +18,11 @@ import {
 } from "@/lib/types";
 import { createCalendarEvent, updateCalendarEvent } from "@/lib/firestore";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import {
+  Layout,
+  LayoutContent,
+  LayoutFooter,
+} from "@astryxdesign/core/Layout";
 import { VStack } from "@astryxdesign/core/VStack";
 import { HStack } from "@astryxdesign/core/HStack";
 import { Text } from "@astryxdesign/core/Text";
@@ -124,6 +129,28 @@ function formatTimeForInput(date: Date): string {
   return `${h}:${m}`;
 }
 
+// Firestore rejects `undefined` field values outright — a single
+// `options: undefined` left behind by a type change (e.g. Dropdown → Phone
+// Number) fails the whole event write. Rebuild each field with only the keys
+// that actually carry a value.
+function sanitizeRegistrationFields(
+  fields: RegistrationField[]
+): RegistrationField[] {
+  return fields.map((f) => {
+    const clean: RegistrationField = {
+      name: f.name,
+      label: f.label.trim(),
+      type: f.type,
+      required: f.required,
+    };
+    if (f.type === "select") {
+      clean.options = (f.options ?? []).map((o) => o.trim()).filter(Boolean);
+    }
+    if (f.placeholder) clean.placeholder = f.placeholder;
+    return clean;
+  });
+}
+
 interface CreateEventDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -190,6 +217,23 @@ export default function CreateEventDialog({
   const isPublic = form.watch("isPublic");
 
   const handleSubmit = async (values: EventFormValues) => {
+    const cleanFields = sanitizeRegistrationFields(registrationFields);
+
+    if (values.isPublic && values.registrationOpen) {
+      const unlabeled = cleanFields.find((f) => !f.label);
+      if (unlabeled) {
+        toast.error("Every registration field needs a label");
+        return;
+      }
+      const emptySelect = cleanFields.find(
+        (f) => f.type === "select" && (f.options?.length ?? 0) === 0
+      );
+      if (emptySelect) {
+        toast.error(`"${emptySelect.label}" needs at least one dropdown option`);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const startDateStr = values.allDay
@@ -237,7 +281,7 @@ export default function CreateEventDialog({
           isPublic: values.isPublic,
           registrationOpen: values.registrationOpen,
           maxRegistrations: maxReg,
-          registrationFields,
+          registrationFields: cleanFields,
         });
         toast.success("Event updated");
       } else {
@@ -269,7 +313,7 @@ export default function CreateEventDialog({
           registrationOpen: values.registrationOpen,
           maxRegistrations: maxReg,
           excludedDates: [],
-          registrationFields,
+          registrationFields: cleanFields,
           workspaceName,
           createdBy: userId,
         });
@@ -305,351 +349,361 @@ export default function CreateEventDialog({
 
   return (
     <Dialog isOpen={open} onOpenChange={onOpenChange} purpose="form" width={600}>
-      <DialogHeader
-        title={isEditing ? "Edit event" : "New event"}
-        subtitle={
-          isEditing
-            ? "Update the event details below."
-            : "Fill in the details to create a new event."
+      <Layout
+        header={
+          <DialogHeader
+            title={isEditing ? "Edit event" : "New event"}
+            subtitle={
+              isEditing
+                ? "Update the event details below."
+                : "Fill in the details to create a new event."
+            }
+            onOpenChange={onOpenChange}
+          />
         }
-        onOpenChange={onOpenChange}
-      />
-
-      <form onSubmit={form.handleSubmit(handleSubmit)}>
-        <VStack padding={4} gap={4}>
-          {/* Basic info */}
-          <Controller
-            control={form.control}
-            name="title"
-            render={({ field, fieldState }) => (
-              <TextInput
-                label="Title"
-                isRequired
-                placeholder="Event title"
-                value={field.value}
-                onChange={field.onChange}
-                status={
-                  fieldState.error
-                    ? { type: "error", message: fieldState.error.message }
-                    : undefined
-                }
-              />
-            )}
-          />
-
-          <Controller
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <TextArea
-                label="Description"
-                isOptional
-                rows={3}
-                placeholder="What's this event about?"
-                value={field.value ?? ""}
-                onChange={field.onChange}
-              />
-            )}
-          />
-
-          {/* Date & time */}
-          {sectionLabel("Date & time")}
-
-          <Controller
-            control={form.control}
-            name="allDay"
-            render={({ field }) => (
-              <CheckboxInput
-                label="All day event"
-                value={field.value}
-                onChange={(checked) => field.onChange(checked)}
-              />
-            )}
-          />
-
-          <HStack gap={3} align="start">
-            <Controller
-              control={form.control}
-              name="startDate"
-              render={({ field, fieldState }) => (
-                <DateInput
-                  label="Start date"
-                  value={field.value as ISODateString}
-                  onChange={(v) => field.onChange(v ?? "")}
-                  status={
-                    fieldState.error
-                      ? { type: "error", message: fieldState.error.message }
-                      : undefined
-                  }
+        content={
+          <LayoutContent>
+            <form id="event-form" onSubmit={form.handleSubmit(handleSubmit)}>
+              <VStack gap={4}>
+                {/* Basic info */}
+                <Controller
+                  control={form.control}
+                  name="title"
+                  render={({ field, fieldState }) => (
+                    <TextInput
+                      label="Title"
+                      isRequired
+                      placeholder="Event title"
+                      value={field.value}
+                      onChange={field.onChange}
+                      status={
+                        fieldState.error
+                          ? { type: "error", message: fieldState.error.message }
+                          : undefined
+                      }
+                    />
+                  )}
                 />
-              )}
-            />
-            {!allDay && (
-              <Controller
-                control={form.control}
-                name="startTime"
-                render={({ field }) => (
-                  <TimeInput
-                    label="Start time"
-                    value={(field.value ?? "") as ISOTimeString}
-                    onChange={(v) => field.onChange(v ?? "")}
-                  />
-                )}
-              />
-            )}
-          </HStack>
 
-          <HStack gap={3} align="start">
-            <Controller
-              control={form.control}
-              name="endDate"
-              render={({ field, fieldState }) => (
-                <DateInput
-                  label="End date"
-                  value={field.value as ISODateString}
-                  onChange={(v) => field.onChange(v ?? "")}
-                  status={
-                    fieldState.error
-                      ? { type: "error", message: fieldState.error.message }
-                      : undefined
-                  }
+                <Controller
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <TextArea
+                      label="Description"
+                      isOptional
+                      rows={3}
+                      placeholder="What's this event about?"
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                    />
+                  )}
                 />
-              )}
-            />
-            {!allDay && (
-              <Controller
-                control={form.control}
-                name="endTime"
-                render={({ field }) => (
-                  <TimeInput
-                    label="End time"
-                    value={(field.value ?? "") as ISOTimeString}
-                    onChange={(v) => field.onChange(v ?? "")}
-                  />
-                )}
-              />
-            )}
-          </HStack>
 
-          {/* Recurrence */}
-          <Controller
-            control={form.control}
-            name="isRepeating"
-            render={({ field }) => (
-              <CheckboxInput
-                label="Recurring event"
-                labelIcon={Repeat}
-                description="This event repeats on a schedule"
-                value={field.value}
-                onChange={(checked) => {
-                  field.onChange(checked);
-                  form.setValue("repeatingType", checked ? "weekly" : null);
-                }}
-              />
-            )}
-          />
+                {/* Date & time */}
+                {sectionLabel("Date & time")}
 
-          {isRepeating && (
-            <VStack gap={4}>
-              <Controller
-                control={form.control}
-                name="repeatingType"
-                render={({ field }) => (
-                  <Selector
-                    label="Repeat frequency"
-                    options={REPEAT_OPTIONS}
-                    value={field.value ?? "weekly"}
-                    onChange={field.onChange}
-                  />
-                )}
-              />
-              <Controller
-                control={form.control}
-                name="repeatingEndDate"
-                render={({ field }) => (
-                  <DateInput
-                    label="Repeat until"
-                    isOptional
-                    description="Leave empty to repeat indefinitely"
-                    hasClear
-                    value={(field.value || undefined) as ISODateString | undefined}
-                    onChange={(v) => field.onChange(v ?? "")}
-                  />
-                )}
-              />
-            </VStack>
-          )}
-
-          {/* RSVP & attendance */}
-          {sectionLabel("RSVP & attendance")}
-
-          <Controller
-            control={form.control}
-            name="rsvpEnabled"
-            render={({ field }) => (
-              <CheckboxInput
-                label="Enable RSVP"
-                labelIcon={CalendarCheck}
-                description="Allow members to accept, decline, or mark as tentative"
-                value={field.value}
-                onChange={(checked) => field.onChange(checked)}
-              />
-            )}
-          />
-
-          {rsvpEnabled && (
-            <Controller
-              control={form.control}
-              name="rsvpDeadline"
-              render={({ field }) => (
-                <DateInput
-                  label="RSVP deadline"
-                  isOptional
-                  description="Leave empty for no deadline"
-                  hasClear
-                  value={(field.value || undefined) as ISODateString | undefined}
-                  onChange={(v) => field.onChange(v ?? "")}
+                <Controller
+                  control={form.control}
+                  name="allDay"
+                  render={({ field }) => (
+                    <CheckboxInput
+                      label="All day event"
+                      value={field.value}
+                      onChange={(checked) => field.onChange(checked)}
+                    />
+                  )}
                 />
-              )}
-            />
-          )}
 
-          <Controller
-            control={form.control}
-            name="isOptional"
-            render={({ field }) => (
-              <CheckboxInput
-                label="Optional event"
-                labelIcon={CircleDashed}
-                description="Shows as tentative in external calendars"
-                value={field.value}
-                onChange={(checked) => field.onChange(checked)}
-              />
-            )}
-          />
+                <HStack gap={3} align="start">
+                  <Controller
+                    control={form.control}
+                    name="startDate"
+                    render={({ field, fieldState }) => (
+                      <DateInput
+                        label="Start date"
+                        value={field.value as ISODateString}
+                        onChange={(v) => field.onChange(v ?? "")}
+                        status={
+                          fieldState.error
+                            ? { type: "error", message: fieldState.error.message }
+                            : undefined
+                        }
+                      />
+                    )}
+                  />
+                  {!allDay && (
+                    <Controller
+                      control={form.control}
+                      name="startTime"
+                      render={({ field }) => (
+                        <TimeInput
+                          label="Start time"
+                          value={(field.value ?? "") as ISOTimeString}
+                          onChange={(v) => field.onChange(v ?? "")}
+                        />
+                      )}
+                    />
+                  )}
+                </HStack>
 
-          {/* Details */}
-          {sectionLabel("Details")}
+                <HStack gap={3} align="start">
+                  <Controller
+                    control={form.control}
+                    name="endDate"
+                    render={({ field, fieldState }) => (
+                      <DateInput
+                        label="End date"
+                        value={field.value as ISODateString}
+                        onChange={(v) => field.onChange(v ?? "")}
+                        status={
+                          fieldState.error
+                            ? { type: "error", message: fieldState.error.message }
+                            : undefined
+                        }
+                      />
+                    )}
+                  />
+                  {!allDay && (
+                    <Controller
+                      control={form.control}
+                      name="endTime"
+                      render={({ field }) => (
+                        <TimeInput
+                          label="End time"
+                          value={(field.value ?? "") as ISOTimeString}
+                          onChange={(v) => field.onChange(v ?? "")}
+                        />
+                      )}
+                    />
+                  )}
+                </HStack>
 
-          <Controller
-            control={form.control}
-            name="location"
-            render={({ field }) => (
-              <TextInput
-                label="Location"
-                isOptional
-                placeholder="Room, address, or meeting link"
-                value={field.value ?? ""}
-                onChange={field.onChange}
-              />
-            )}
-          />
-
-          <HStack gap={3} align="start">
-            <Controller
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <Selector
-                  label="Category"
-                  options={CATEGORY_OPTIONS}
-                  value={field.value}
-                  onChange={(v) => field.onChange(v as EventCategory)}
+                {/* Recurrence */}
+                <Controller
+                  control={form.control}
+                  name="isRepeating"
+                  render={({ field }) => (
+                    <CheckboxInput
+                      label="Recurring event"
+                      labelIcon={Repeat}
+                      description="This event repeats on a schedule"
+                      value={field.value}
+                      onChange={(checked) => {
+                        field.onChange(checked);
+                        form.setValue("repeatingType", checked ? "weekly" : null);
+                      }}
+                    />
+                  )}
                 />
-              )}
-            />
-            <Controller
-              control={form.control}
-              name="color"
-              render={({ field }) => (
-                <Selector
-                  label="Color"
-                  options={COLOR_OPTIONS}
-                  value={field.value}
-                  onChange={field.onChange}
-                  renderOption={renderColorOption}
+
+                {isRepeating && (
+                  <VStack gap={4}>
+                    <Controller
+                      control={form.control}
+                      name="repeatingType"
+                      render={({ field }) => (
+                        <Selector
+                          label="Repeat frequency"
+                          options={REPEAT_OPTIONS}
+                          value={field.value ?? "weekly"}
+                          onChange={field.onChange}
+                        />
+                      )}
+                    />
+                    <Controller
+                      control={form.control}
+                      name="repeatingEndDate"
+                      render={({ field }) => (
+                        <DateInput
+                          label="Repeat until"
+                          isOptional
+                          description="Leave empty to repeat indefinitely"
+                          hasClear
+                          value={(field.value || undefined) as ISODateString | undefined}
+                          onChange={(v) => field.onChange(v ?? "")}
+                        />
+                      )}
+                    />
+                  </VStack>
+                )}
+
+                {/* RSVP & attendance */}
+                {sectionLabel("RSVP & attendance")}
+
+                <Controller
+                  control={form.control}
+                  name="rsvpEnabled"
+                  render={({ field }) => (
+                    <CheckboxInput
+                      label="Enable RSVP"
+                      labelIcon={CalendarCheck}
+                      description="Allow members to accept, decline, or mark as tentative"
+                      value={field.value}
+                      onChange={(checked) => field.onChange(checked)}
+                    />
+                  )}
                 />
-              )}
-            />
-          </HStack>
 
-          {/* Visibility & registration */}
-          {sectionLabel("Visibility & registration")}
-
-          <Controller
-            control={form.control}
-            name="isPublic"
-            render={({ field }) => (
-              <CheckboxInput
-                label="Public event"
-                labelIcon={Globe}
-                description="Visible on the public calendar and accessible via link"
-                value={field.value}
-                onChange={(checked) => field.onChange(checked)}
-              />
-            )}
-          />
-
-          {isPublic && (
-            <VStack gap={4}>
-              <Controller
-                control={form.control}
-                name="registrationOpen"
-                render={({ field }) => (
-                  <CheckboxInput
-                    label="Accept registrations"
-                    labelIcon={UserCheck}
-                    description="Allow visitors to register for this event"
-                    value={field.value}
-                    onChange={(checked) => field.onChange(checked)}
+                {rsvpEnabled && (
+                  <Controller
+                    control={form.control}
+                    name="rsvpDeadline"
+                    render={({ field }) => (
+                      <DateInput
+                        label="RSVP deadline"
+                        isOptional
+                        description="Leave empty for no deadline"
+                        hasClear
+                        value={(field.value || undefined) as ISODateString | undefined}
+                        onChange={(v) => field.onChange(v ?? "")}
+                      />
+                    )}
                   />
                 )}
-              />
-              <Controller
-                control={form.control}
-                name="maxRegistrations"
-                render={({ field }) => (
-                  <TextInput
-                    label="Max registrations"
-                    isOptional
-                    placeholder="Leave empty for unlimited"
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
+
+                <Controller
+                  control={form.control}
+                  name="isOptional"
+                  render={({ field }) => (
+                    <CheckboxInput
+                      label="Optional event"
+                      labelIcon={CircleDashed}
+                      description="Shows as tentative in external calendars"
+                      value={field.value}
+                      onChange={(checked) => field.onChange(checked)}
+                    />
+                  )}
+                />
+
+                {/* Details */}
+                {sectionLabel("Details")}
+
+                <Controller
+                  control={form.control}
+                  name="location"
+                  render={({ field }) => (
+                    <TextInput
+                      label="Location"
+                      isOptional
+                      placeholder="Room, address, or meeting link"
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+
+                <HStack gap={3} align="start">
+                  <Controller
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <Selector
+                        label="Category"
+                        options={CATEGORY_OPTIONS}
+                        value={field.value}
+                        onChange={(v) => field.onChange(v as EventCategory)}
+                      />
+                    )}
                   />
+                  <Controller
+                    control={form.control}
+                    name="color"
+                    render={({ field }) => (
+                      <Selector
+                        label="Color"
+                        options={COLOR_OPTIONS}
+                        value={field.value}
+                        onChange={field.onChange}
+                        renderOption={renderColorOption}
+                      />
+                    )}
+                  />
+                </HStack>
+
+                {/* Visibility & registration */}
+                {sectionLabel("Visibility & registration")}
+
+                <Controller
+                  control={form.control}
+                  name="isPublic"
+                  render={({ field }) => (
+                    <CheckboxInput
+                      label="Public event"
+                      labelIcon={Globe}
+                      description="Visible on the public calendar and accessible via link"
+                      value={field.value}
+                      onChange={(checked) => field.onChange(checked)}
+                    />
+                  )}
+                />
+
+                {isPublic && (
+                  <VStack gap={4}>
+                    <Controller
+                      control={form.control}
+                      name="registrationOpen"
+                      render={({ field }) => (
+                        <CheckboxInput
+                          label="Accept registrations"
+                          labelIcon={UserCheck}
+                          description="Allow visitors to register for this event"
+                          value={field.value}
+                          onChange={(checked) => field.onChange(checked)}
+                        />
+                      )}
+                    />
+                    <Controller
+                      control={form.control}
+                      name="maxRegistrations"
+                      render={({ field }) => (
+                        <TextInput
+                          label="Max registrations"
+                          isOptional
+                          placeholder="Leave empty for unlimited"
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                        />
+                      )}
+                    />
+                    <VStack gap={1}>
+                      <Text type="label" weight="medium">
+                        Registration form fields
+                      </Text>
+                      <Text type="supporting" color="secondary">
+                        Customize the information you collect from registrants
+                      </Text>
+                    </VStack>
+                    <RegistrationFormBuilder
+                      fields={registrationFields}
+                      onChange={setRegistrationFields}
+                    />
+                  </VStack>
                 )}
-              />
-              <VStack gap={1}>
-                <Text type="label" weight="medium">
-                  Registration form fields
-                </Text>
-                <Text type="supporting" color="secondary">
-                  Customize the information you collect from registrants
-                </Text>
               </VStack>
-              <RegistrationFormBuilder
-                fields={registrationFields}
-                onChange={setRegistrationFields}
+            </form>
+          </LayoutContent>
+        }
+        footer={
+          <LayoutFooter>
+            <HStack gap={2} hAlign="end">
+              <Button
+                label="Cancel"
+                variant="ghost"
+                type="button"
+                onClick={() => onOpenChange(false)}
               />
-            </VStack>
-          )}
-
-          <Divider />
-          <HStack justify="end" gap={2}>
-            <Button
-              label="Cancel"
-              variant="ghost"
-              type="button"
-              onClick={() => onOpenChange(false)}
-            />
-            <Button
-              label={isEditing ? "Save changes" : "Create event"}
-              variant="primary"
-              type="submit"
-              isLoading={loading}
-            />
-          </HStack>
-        </VStack>
-      </form>
+              <Button
+                label={isEditing ? "Save changes" : "Create event"}
+                variant="primary"
+                type="submit"
+                form="event-form"
+                isLoading={loading}
+              />
+            </HStack>
+          </LayoutFooter>
+        }
+      />
     </Dialog>
   );
 }
